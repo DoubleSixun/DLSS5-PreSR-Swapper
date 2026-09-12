@@ -46,13 +46,13 @@ jobs:
           node --check standalone/core/derived/pe.js
           node --check scripts/test-presr-download.js
 
-      - name: Unit and Pre-SR UI wiring tests
+      - name: Unit and standalone wiring tests
         run: npm test
 
       - name: Verify pinned Pre-SR backend
         run: node scripts/test-presr-download.js
 
-  build-preview:
+  build-standalone-preview:
     needs: test
     runs-on: windows-latest
     steps:
@@ -68,13 +68,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build runtime-free portable preview
-        run: npm run build:portable
+      - name: Build standalone runtime-free portable preview
+        run: npm run build:standalone:portable
 
-      - name: Upload Windows preview
+      - name: Upload standalone Windows preview
         uses: actions/upload-artifact@v4
         with:
-          name: DLSS5-PreSR-Swapper-Windows-preview
-          path: dist/*portable.exe
+          name: DLSS-Neural-Rendering-Manager-Windows-preview
+          path: dist-standalone/*portable.exe
           if-no-files-found: error
           retention-days: 14

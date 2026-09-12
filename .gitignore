@@ -3,6 +3,7 @@ payload/
 addons/
 overlay-bin/
 dist/
+dist-standalone/
 build/icon.ico
 build/icon.png
 *.log

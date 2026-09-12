@@ -106,3 +106,17 @@ test('per-pass style controls are present in the standalone UI', () => {
   assert.match(html, /id="pass3Style"/);
   assert.match(html, /data-i18n="inheritPass1"/);
 });
+
+test('standalone packaging has its own product identity and entry point', () => {
+  const pkg = JSON.parse(read('package.json'));
+  const config = JSON.parse(read('standalone/electron-builder.json'));
+  assert.equal(pkg.scripts['build:standalone:portable'], 'electron-builder --config standalone/electron-builder.json --win portable');
+  assert.equal(config.productName, 'DLSS Neural Rendering Manager');
+  assert.equal(config.appId, 'com.doublesixun.dlssnrmanager');
+  assert.equal(config.extraMetadata.name, 'dlss-neural-rendering-manager');
+  assert.equal(config.extraMetadata.version, '0.1.0');
+  assert.equal(config.extraMetadata.main, 'standalone/main.js');
+  assert.deepEqual(config.win.target, ['portable']);
+  assert.match(config.files.join('\n'), /standalone\/\*\*\/\*/);
+  assert.doesNotMatch(config.files.join('\n'), /src\/\*\*/);
+});
