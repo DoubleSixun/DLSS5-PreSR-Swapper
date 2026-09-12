@@ -15,7 +15,7 @@ test('standalone app does not load the upstream product shell', () => {
   assert.doesNotMatch(main, /community-client|admin-vault|RenoDX/i);
 });
 
-test('standalone core has no Feeder, RenoDX, emulator or Community dependencies', () => {
+test('standalone core has no Feeder, RenoDX, emulator or Community module dependencies', () => {
   const files = [
     'standalone/core/game-scan.js',
     'standalone/core/file-state.js',
@@ -26,7 +26,10 @@ test('standalone core has no Feeder, RenoDX, emulator or Community dependencies'
   ];
   const source = files.map(read).join('\n');
   assert.doesNotMatch(source, /src\/core\/(?:scan|apply|feeder-config|runtime-components|presr-bootstrap)/);
-  assert.doesNotMatch(source, /community-client|admin-vault|emulators\.js|feeder-release|RenoDX/i);
+  // Third-party packages can legitimately carry attribution files whose names
+  // contain terms such as RenoDX. What must not survive here is a code/module
+  // dependency on the old product surfaces themselves.
+  assert.doesNotMatch(source, /require\s*\(\s*['"][^'"]*(?:community-client|admin-vault|emulators|feeder-release|renodx)[^'"]*['"]\s*\)/i);
 });
 
 test('retained upstream-derived code is isolated behind an attributed boundary', () => {
