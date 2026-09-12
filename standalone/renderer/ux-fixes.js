@@ -140,10 +140,10 @@
     if (!hero) return;
     if (game.bannerDataUrl) {
       const url = String(game.bannerDataUrl).replace(/"/g, '%22');
-      hero.style.backgroundImage = `linear-gradient(90deg,rgba(7,13,18,.90) 0%,rgba(7,13,18,.58) 48%,rgba(7,13,18,.18) 100%),url("${url}")`;
+      hero.style.setProperty('background-image', `linear-gradient(90deg,rgba(7,13,18,.90) 0%,rgba(7,13,18,.58) 48%,rgba(7,13,18,.18) 100%),url("${url}")`, 'important');
       hero.classList.add('has-banner');
     } else {
-      hero.style.backgroundImage = '';
+      hero.style.removeProperty('background-image');
       hero.classList.remove('has-banner');
     }
   }
