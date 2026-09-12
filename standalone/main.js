@@ -10,6 +10,7 @@ const fileState = require('./core/file-state');
 const runtime = require('./core/runtime');
 const optiscaler = require('./core/optiscaler');
 const nrSettings = require('./core/nr-settings');
+const discovery = require('./core/discovery');
 
 const PROFILE_BY_EXE = Object.freeze({
   'yysls.exe': Object.freeze({
@@ -18,7 +19,8 @@ const PROFILE_BY_EXE = Object.freeze({
     api: 'dxgi',
     apiLabel: 'DirectX 12',
     bitness: 64,
-    onlineRisk: true
+    onlineRisk: true,
+    bannerUrl: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3564740/header.jpg'
   })
 });
 
@@ -34,7 +36,9 @@ const DEFAULT_GAME_SETTINGS = Object.freeze({
 
 let win = null;
 let liveState = null;
+let discoveryPromise = null;
 const iconCache = new Map();
+const bannerCache = new Map();
 
 const stateFile = () => path.join(app.getPath('userData'), 'standalone-library.json');
 const idFor = exePath => crypto.createHash('sha1').update(path.resolve(exePath).toLowerCase()).digest('hex').slice(0, 16);
@@ -69,7 +73,7 @@ function profileFor(exePath) {
   return PROFILE_BY_EXE[path.basename(String(exePath || '')).toLowerCase()] || null;
 }
 
-function normalizeRecord(exePath) {
+function normalizeRecord(exePath, meta = {}) {
   const resolved = path.resolve(exePath);
   const profile = profileFor(resolved);
   return {
@@ -77,8 +81,12 @@ function normalizeRecord(exePath) {
     dir: path.dirname(resolved),
     exePath: resolved,
     profileId: profile?.id || null,
-    displayName: path.basename(resolved, path.extname(resolved)),
-    settings: settingsFor()
+    displayName: meta.displayName || path.basename(resolved, path.extname(resolved)),
+    launcher: meta.launcher || 'Manual',
+    storeId: meta.storeId || null,
+    libraryDir: meta.libraryDir || path.dirname(resolved),
+    bannerPath: meta.bannerPath || null,
+    settings: settingsFor(meta.settings)
   };
 }
 
@@ -96,39 +104,52 @@ async function iconFor(exePath) {
   }
 }
 
+function bannerFor(record) {
+  const profile = profileFor(record.exePath);
+  if (record.bannerPath && fs.existsSync(record.bannerPath)) {
+    const key = path.resolve(record.bannerPath).toLowerCase();
+    if (bannerCache.has(key)) return bannerCache.get(key);
+    try {
+      const ext = path.extname(record.bannerPath).toLowerCase();
+      const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
+      const value = `data:${mime};base64,${fs.readFileSync(record.bannerPath).toString('base64')}`;
+      bannerCache.set(key, value);
+      return value;
+    } catch {}
+  }
+  return profile?.bannerUrl || null;
+}
+
 function existingNrSetup(exePath, chosen) {
   if (!chosen) return false;
   const exeDir = path.dirname(exePath);
   const hook = chosen.api === 'vulkan' ? 'winmm.dll' : 'dxgi.dll';
-  return [
-    path.join(exeDir, hook),
-    path.join(exeDir, 'OptiScaler.ini'),
-    path.join(exeDir, 'nvngx.dll_dlssnr.dll')
-  ].every(file => fs.existsSync(file));
+  return [path.join(exeDir, hook), path.join(exeDir, 'OptiScaler.ini'), path.join(exeDir, 'nvngx.dll_dlssnr.dll')]
+    .every(file => fs.existsSync(file));
 }
 
 async function inspectRecord(record) {
   const profile = profileFor(record.exePath);
   const result = await gameScan.inspect(record.exePath, profile);
-  const runtimeInfo = runtime.detect(app, record.exePath);
-  const effectiveSettings = nrSettings.read(record.exePath, settingsFor(record.settings));
-  const existingSetup = existingNrSetup(record.exePath, result.chosen) && !result.hasBackup;
   return {
     id: record.id,
     dir: record.dir,
     exePath: record.exePath,
     profileId: record.profileId,
     displayName: profile?.names?.[loadState().language] || record.displayName,
-    settings: effectiveSettings,
+    launcher: record.launcher || 'Manual',
+    storeId: record.storeId || null,
+    settings: nrSettings.read(record.exePath, settingsFor(record.settings)),
     onlineRisk: Boolean(profile?.onlineRisk),
     chosen: result.chosen,
     dlss: result.dlss,
     installed: Boolean(result.installed),
-    existingSetup,
+    existingSetup: existingNrSetup(record.exePath, result.chosen) && !result.hasBackup,
     hasBackup: Boolean(result.hasBackup),
     optiscaler: result.optiscaler,
-    runtime: runtimeInfo,
-    iconDataUrl: await iconFor(record.exePath)
+    runtime: runtime.detect(app, record.exePath),
+    iconDataUrl: await iconFor(record.exePath),
+    bannerDataUrl: bannerFor(record)
   };
 }
 
@@ -148,7 +169,8 @@ async function viewState() {
         existingSetup: false,
         hasBackup: fileState.hasBackup(record.dir),
         runtime: runtime.detect(app, record.exePath),
-        iconDataUrl: await iconFor(record.exePath)
+        iconDataUrl: await iconFor(record.exePath),
+        bannerDataUrl: bannerFor(record)
       });
     }
   }
@@ -159,14 +181,40 @@ async function viewState() {
   return { language: state.language, selectedGameId: state.selectedGameId, games };
 }
 
+async function discoverAndMerge() {
+  const found = await discovery.discoverGames();
+  const state = loadState();
+  let added = 0;
+  for (const game of found) {
+    const candidate = normalizeRecord(game.exePath, game);
+    const existing = state.games.find(record => path.resolve(record.exePath).toLowerCase() === path.resolve(candidate.exePath).toLowerCase());
+    if (existing) {
+      existing.displayName = game.displayName || existing.displayName;
+      existing.launcher = game.launcher || existing.launcher;
+      existing.storeId = game.storeId || existing.storeId;
+      existing.libraryDir = game.libraryDir || existing.libraryDir;
+      existing.bannerPath = game.bannerPath || existing.bannerPath;
+      continue;
+    }
+    state.games.push(candidate);
+    added += 1;
+  }
+  if (!state.selectedGameId && state.games[0]) state.selectedGameId = state.games[0].id;
+  saveState();
+  return { added, state: await viewState() };
+}
+
+async function ensureAutoDiscovery() {
+  if (!discoveryPromise) discoveryPromise = discoverAndMerge().catch(() => ({ added: 0 }));
+  await discoveryPromise;
+}
+
 function recordFor(id) {
   return loadState().games.find(game => game.id === id) || null;
 }
 
 function safeResult(work) {
-  return Promise.resolve()
-    .then(work)
-    .then(value => ({ ok: true, value }))
+  return Promise.resolve().then(work).then(value => ({ ok: true, value }))
     .catch(error => ({ ok: false, code: error.code || 'error', message: error.message || String(error) }));
 }
 
@@ -210,14 +258,20 @@ function createWindow() {
   win.once('ready-to-show', () => win.show());
 }
 
-ipcMain.handle('app:get-state', () => safeResult(viewState));
+ipcMain.handle('app:get-state', () => safeResult(async () => {
+  await ensureAutoDiscovery();
+  return viewState();
+}));
 ipcMain.handle('app:set-language', (_event, language) => safeResult(async () => {
   if (!['en', 'zh-CN'].includes(language)) throw new Error('Unsupported language');
   loadState().language = language;
   saveState();
   return viewState();
 }));
-
+ipcMain.handle('games:rescan', () => safeResult(async () => {
+  discoveryPromise = discoverAndMerge();
+  return discoveryPromise;
+}));
 ipcMain.handle('games:add', () => safeResult(async () => {
   const picked = await dialog.showOpenDialog(win, {
     title: loadState().language === 'zh-CN' ? '选择游戏主程序' : 'Choose the game executable',
@@ -228,23 +282,18 @@ ipcMain.handle('games:add', () => safeResult(async () => {
   const record = normalizeRecord(picked.filePaths[0]);
   const state = loadState();
   const existing = state.games.findIndex(game => game.id === record.id);
-  if (existing >= 0) {
-    state.games[existing] = { ...state.games[existing], ...record, settings: settingsFor(state.games[existing].settings) };
-  } else {
-    state.games.push(record);
-  }
+  if (existing >= 0) state.games[existing] = { ...state.games[existing], ...record, settings: settingsFor(state.games[existing].settings) };
+  else state.games.push(record);
   state.selectedGameId = record.id;
   saveState();
   return viewState();
 }));
-
 ipcMain.handle('games:select', (_event, id) => safeResult(async () => {
   if (!recordFor(id)) throw new Error('Unknown game');
   loadState().selectedGameId = id;
   saveState();
   return viewState();
 }));
-
 ipcMain.handle('games:remove', (_event, id) => safeResult(async () => {
   const state = loadState();
   state.games = state.games.filter(game => game.id !== id);
@@ -252,14 +301,12 @@ ipcMain.handle('games:remove', (_event, id) => safeResult(async () => {
   saveState();
   return viewState();
 }));
-
 ipcMain.handle('game:open-folder', (_event, id) => safeResult(async () => {
   const record = recordFor(id);
   if (!record) throw new Error('Unknown game');
   await shell.openPath(path.dirname(record.exePath));
   return true;
 }));
-
 ipcMain.handle('game:set-settings', (_event, id, settings) => safeResult(async () => {
   const record = recordFor(id);
   if (!record) throw new Error('Unknown game');
@@ -282,19 +329,16 @@ ipcMain.handle('game:set-settings', (_event, id, settings) => safeResult(async (
   nrSettings.apply(record.exePath, next);
   return viewState();
 }));
-
 ipcMain.handle('runtime:import', (_event, id) => safeResult(async () => {
   const record = recordFor(id);
   if (!record) throw new Error('Unknown game');
   await runtime.pickAndCache(app, dialog, record.exePath, loadState().language);
   return viewState();
 }));
-
 ipcMain.handle('game:install', (_event, id) => safeResult(async () => {
   const record = recordFor(id);
   if (!record) throw new Error('Unknown game');
   if (!(await confirmOnlineRisk(record))) return { cancelled: true, state: await viewState() };
-
   const inspected = await inspectRecord(record);
   if (!inspected.chosen) throw Object.assign(new Error('No supported game executable was detected.'), { code: 'noExecutable' });
   if (inspected.chosen.bitness !== 64) throw Object.assign(new Error('This Neural Rendering route requires a 64-bit game.'), { code: 'unsupportedArchitecture' });
@@ -302,7 +346,6 @@ ipcMain.handle('game:install', (_event, id) => safeResult(async () => {
   if (!inspected.dlss) throw Object.assign(new Error('Native DLSS was not detected for this game.'), { code: 'noDlss' });
   if (inspected.existingSetup) throw Object.assign(new Error('An existing OptiScaler Neural Rendering setup was detected. Its settings can be managed here, but it will not be overwritten by this installer.'), { code: 'existingSetup' });
   if (inspected.hasBackup) throw Object.assign(new Error('This game already has a managed installation. Restore originals before reinstalling.'), { code: 'alreadyInstalled' });
-
   const runtimePath = await runtime.resolve(app, dialog, record.exePath, loadState().language);
   const packageRoot = await optiscaler.ensurePackage(app.getPath('userData'));
   const logs = [];
@@ -318,7 +361,6 @@ ipcMain.handle('game:install', (_event, id) => safeResult(async () => {
   nrSettings.apply(record.exePath, settingsFor(record.settings));
   return { logs, state: await viewState() };
 }));
-
 ipcMain.handle('game:restore', (_event, id) => safeResult(async () => {
   const record = recordFor(id);
   if (!record) throw new Error('Unknown game');
@@ -336,9 +378,5 @@ ipcMain.on('window:maximize', () => {
 ipcMain.on('window:close', () => win?.close());
 
 app.whenReady().then(createWindow);
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
-});
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
