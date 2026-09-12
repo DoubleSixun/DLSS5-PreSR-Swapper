@@ -22,6 +22,30 @@ NVIDIA's Neural Rendering runtime is not supplied by this OptiScaler release.
 This integration uses the existing Swapper payload's `nvngx_dlssnr.dll`; it
 does not relicense that file or imply NVIDIA support for the integration.
 
+## OptiScaler DLSS-NR Pre-SR Multipass (optional download)
+
+The Pre-SR performance backend is downloaded from the independent GPL-3.0
+project maintained at:
+https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass
+
+This application pins the public v0.7.7 release archive and verifies its
+SHA-256 checksum before extraction. The archive is not bundled into this MIT
+application. When selected, Swapper configures `RunBeforeSR=true` so Neural
+Rendering runs at the game's render resolution before DLSS Super Resolution.
+The default remains one pass at `WorkingScale=1.0`; users can change model
+settings later through OptiScaler's own overlay.
+
+Pinned release source:
+https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass/tree/v0.7.7
+
+Pinned release archive:
+https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass/releases/tag/v0.7.7
+
+The Pre-SR project does not redistribute NVIDIA's proprietary
+`nvngx_dlssnr.dll`. That runtime is still supplied separately by the user or by
+Swapper's existing payload path. No claim of NVIDIA endorsement or support is
+made.
+
 ## DLSS5-Feeder
 
 The bundled client add-ons, 64-bit helper, shader and diagnostic verifier are
