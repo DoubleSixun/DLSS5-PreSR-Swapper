@@ -17,6 +17,29 @@ scan.scanSource = (sourceDir) => presr.scanThinPayload(sourceDir, originalScanSo
 presr.restrictRoutesToPreSr(routes);
 presr.attachRuntimeImport(optiscaler, { app, dialog });
 
+// ---------- product scope: keep Community compatibility, remove Chat ----------
+// Community-tested game reports are useful for a compatibility-focused tool;
+// the general chat room is not part of the Pre-SR workflow. Remove the chat
+// surface from every renderer window and stop any chat polling that upstream
+// may have initialized. Community itself is intentionally left untouched.
+app.on('browser-window-created', (_event, win) => {
+  win.webContents.on('did-finish-load', () => {
+    win.webContents.executeJavaScript(`(() => {
+      try { window.chatUi?.stopPolling?.(); } catch {}
+      const selectors = [
+        '[data-view="chat"]', '#view-chat', '#chatAttachDialog', '#chatViewer',
+        '#chatContext', '#chatLabelMenu'
+      ];
+      for (const selector of selectors) {
+        for (const node of document.querySelectorAll(selector)) node.remove();
+      }
+      for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
+        if (/chat\.css(?:$|[?#])/i.test(link.getAttribute('href') || '')) link.remove();
+      }
+    })()` ).catch(() => {});
+  });
+});
+
 // ---------- Where Winds Meet / yysls profile ----------
 // yysls.exe can be hard for generic PE/import inspection to classify on some
 // builds. If the exact game executable is present, prefer it over launchers and
