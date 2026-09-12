@@ -32,9 +32,13 @@ jobs:
           node --check main.js
           node --check preload.js
           node --check src/core/optiscaler.js
+          node --check scripts/test-presr-download.js
 
       - name: Unit tests
         run: npm test
+
+      - name: Verify pinned Pre-SR backend
+        run: node scripts/test-presr-download.js
 
       - name: Electron UI smoke test
         run: npm run test:ui
