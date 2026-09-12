@@ -9,6 +9,7 @@ const gameScan = require('./core/game-scan');
 const fileState = require('./core/file-state');
 const runtime = require('./core/runtime');
 const optiscaler = require('./core/optiscaler');
+const nrSettings = require('./core/nr-settings');
 
 const PROFILE_BY_EXE = Object.freeze({
   'yysls.exe': Object.freeze({
@@ -23,6 +24,7 @@ const PROFILE_BY_EXE = Object.freeze({
 
 const STYLE_VALUES = new Set(['auto', '0', '1', '2']);
 const DEFAULT_GAME_SETTINGS = Object.freeze({
+  enabled: true,
   runBeforeSR: true,
   passes: 1,
   pass1Style: 'auto',
@@ -32,6 +34,7 @@ const DEFAULT_GAME_SETTINGS = Object.freeze({
 
 let win = null;
 let liveState = null;
+const iconCache = new Map();
 
 const stateFile = () => path.join(app.getPath('userData'), 'standalone-library.json');
 const idFor = exePath => crypto.createHash('sha1').update(path.resolve(exePath).toLowerCase()).digest('hex').slice(0, 16);
@@ -79,24 +82,53 @@ function normalizeRecord(exePath) {
   };
 }
 
+async function iconFor(exePath) {
+  const key = path.resolve(exePath).toLowerCase();
+  if (iconCache.has(key)) return iconCache.get(key);
+  try {
+    const image = await app.getFileIcon(exePath, { size: 'large' });
+    const value = image && !image.isEmpty() ? image.toDataURL() : null;
+    iconCache.set(key, value);
+    return value;
+  } catch {
+    iconCache.set(key, null);
+    return null;
+  }
+}
+
+function existingNrSetup(exePath, chosen) {
+  if (!chosen) return false;
+  const exeDir = path.dirname(exePath);
+  const hook = chosen.api === 'vulkan' ? 'winmm.dll' : 'dxgi.dll';
+  return [
+    path.join(exeDir, hook),
+    path.join(exeDir, 'OptiScaler.ini'),
+    path.join(exeDir, 'nvngx.dll_dlssnr.dll')
+  ].every(file => fs.existsSync(file));
+}
+
 async function inspectRecord(record) {
   const profile = profileFor(record.exePath);
   const result = await gameScan.inspect(record.exePath, profile);
   const runtimeInfo = runtime.detect(app, record.exePath);
+  const effectiveSettings = nrSettings.read(record.exePath, settingsFor(record.settings));
+  const existingSetup = existingNrSetup(record.exePath, result.chosen) && !result.hasBackup;
   return {
     id: record.id,
     dir: record.dir,
     exePath: record.exePath,
     profileId: record.profileId,
     displayName: profile?.names?.[loadState().language] || record.displayName,
-    settings: settingsFor(record.settings),
+    settings: effectiveSettings,
     onlineRisk: Boolean(profile?.onlineRisk),
     chosen: result.chosen,
     dlss: result.dlss,
     installed: Boolean(result.installed),
+    existingSetup,
     hasBackup: Boolean(result.hasBackup),
     optiscaler: result.optiscaler,
-    runtime: runtimeInfo
+    runtime: runtimeInfo,
+    iconDataUrl: await iconFor(record.exePath)
   };
 }
 
@@ -108,13 +140,15 @@ async function viewState() {
     catch (error) {
       games.push({
         ...record,
-        settings: settingsFor(record.settings),
+        settings: nrSettings.read(record.exePath, settingsFor(record.settings)),
         scanError: error.message || String(error),
         chosen: null,
         dlss: null,
         installed: false,
+        existingSetup: false,
         hasBackup: fileState.hasBackup(record.dir),
-        runtime: runtime.detect(app, record.exePath)
+        runtime: runtime.detect(app, record.exePath),
+        iconDataUrl: await iconFor(record.exePath)
       });
     }
   }
@@ -229,7 +263,8 @@ ipcMain.handle('game:open-folder', (_event, id) => safeResult(async () => {
 ipcMain.handle('game:set-settings', (_event, id, settings) => safeResult(async () => {
   const record = recordFor(id);
   if (!record) throw new Error('Unknown game');
-  const next = settingsFor(record.settings);
+  const next = nrSettings.read(record.exePath, settingsFor(record.settings));
+  if (Object.prototype.hasOwnProperty.call(settings || {}, 'enabled')) next.enabled = Boolean(settings.enabled);
   if (Object.prototype.hasOwnProperty.call(settings || {}, 'runBeforeSR')) next.runBeforeSR = Boolean(settings.runBeforeSR);
   if (Object.prototype.hasOwnProperty.call(settings || {}, 'passes')) {
     const passes = Number(settings.passes);
@@ -244,7 +279,7 @@ ipcMain.handle('game:set-settings', (_event, id, settings) => safeResult(async (
   }
   record.settings = next;
   saveState();
-  optiscaler.updateSettings(record.exePath, next);
+  nrSettings.apply(record.exePath, next);
   return viewState();
 }));
 
@@ -265,6 +300,7 @@ ipcMain.handle('game:install', (_event, id) => safeResult(async () => {
   if (inspected.chosen.bitness !== 64) throw Object.assign(new Error('This Neural Rendering route requires a 64-bit game.'), { code: 'unsupportedArchitecture' });
   if (!inspected.chosen.api) throw Object.assign(new Error('The rendering API could not be detected.'), { code: 'noRenderingApi' });
   if (!inspected.dlss) throw Object.assign(new Error('Native DLSS was not detected for this game.'), { code: 'noDlss' });
+  if (inspected.existingSetup) throw Object.assign(new Error('An existing OptiScaler Neural Rendering setup was detected. Its settings can be managed here, but it will not be overwritten by this installer.'), { code: 'existingSetup' });
   if (inspected.hasBackup) throw Object.assign(new Error('This game already has a managed installation. Restore originals before reinstalling.'), { code: 'alreadyInstalled' });
 
   const runtimePath = await runtime.resolve(app, dialog, record.exePath, loadState().language);
@@ -279,6 +315,7 @@ ipcMain.handle('game:install', (_event, id) => safeResult(async () => {
     runtimePath,
     settings: settingsFor(record.settings)
   }, entry => logs.push(entry));
+  nrSettings.apply(record.exePath, settingsFor(record.settings));
   return { logs, state: await viewState() };
 }));
 
