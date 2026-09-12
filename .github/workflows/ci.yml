@@ -37,13 +37,17 @@ jobs:
           node --check standalone/main.js
           node --check standalone/preload.js
           node --check standalone/renderer/app.js
+          node --check standalone/renderer/ux-fixes.js
           node --check standalone/core/ini.js
           node --check standalone/core/download.js
           node --check standalone/core/file-state.js
           node --check standalone/core/game-scan.js
+          node --check standalone/core/discovery.js
           node --check standalone/core/runtime.js
           node --check standalone/core/optiscaler.js
+          node --check standalone/core/nr-settings.js
           node --check standalone/core/derived/pe.js
+          node --check standalone/core/derived/library.js
           node --check scripts/test-presr-download.js
 
       - name: Unit and standalone wiring tests
