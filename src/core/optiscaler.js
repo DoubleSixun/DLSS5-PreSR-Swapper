@@ -16,6 +16,7 @@ const RELEASES = Object.freeze([
     version: '0.2.0-patch1',
     mode: 'standard',
     label: 'Standard · Post-SR',
+    readme: 'READ ME - DLSS Neural Rendering.txt',
     url: 'https://github.com/Dagherbou/OptiScaler_DLSSNR/releases/download/v0.2.0-patch1/OptiScaler-DLSSNR-v0.2.0-onimusha-fix.zip',
     sha256: '5db547216fa8a7dbd8ab0a193da1e3bce0ea4bd71f91189afa4ed2ede8bb9561',
     licenseUrl: 'https://raw.githubusercontent.com/Dagherbou/OptiScaler_DLSSNR/393e070/LICENSE',
@@ -26,10 +27,11 @@ const RELEASES = Object.freeze([
     upstreamVersion: '0.7.7',
     mode: 'presr',
     label: 'Performance · Pre-SR (NR → SR)',
+    readme: 'INSTALL-DLSSNR.md',
     url: 'https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass/releases/download/v0.7.7/OptiScaler-DLSSNR-v0.7.7.zip',
     sha256: '4a315a3b3ee495631bd7cb1f562f609af577443602e507bfc7a7e6749c296258',
     // Both upstreams are GPL-3.0. Keep using the already pinned canonical text
-    // while the release source itself is attributed in THIRD_PARTY_NOTICES.
+    // while the Pre-SR source itself is attributed in THIRD_PARTY_NOTICES.
     licenseUrl: 'https://raw.githubusercontent.com/Dagherbou/OptiScaler_DLSSNR/393e070/LICENSE',
     licenseHash: '3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986'
   }),
@@ -39,6 +41,7 @@ const RELEASES = Object.freeze([
     version: '0.1.1.5-dlssnr',
     mode: 'legacy',
     label: 'Legacy compatibility · 0.1.1.5',
+    readme: 'READ ME - DLSS Neural Rendering.txt',
     url: 'https://github.com/Dagherbou/OptiScaler_DLSSNR/releases/download/v0.1.1.5-dlssnr/OptiScaler-DLSSNR-v0.1.1.5-dlssnr.zip',
     sha256: '735b10b4077bc187ba4d07d607e864349aca386344c6126aba61ced746d27ece',
     licenseUrl: 'https://raw.githubusercontent.com/Dagherbou/OptiScaler_DLSSNR/393e070/LICENSE',
@@ -66,11 +69,11 @@ const LICENSES = ['DirectX_LICENSE.txt', 'FidelityFX_v2_LICENSE.md', 'RenoDX_ATT
 
 function fail(code, message = code) { return Object.assign(new Error(message), { code }); }
 
-function validatePayload(root) {
+function validatePayload(root, release = releaseFromRoot(root)) {
   for (const rel of ['OptiScaler.dll', 'nvngx.dll_dlssnr.dll', ...LIBRARIES.map(f => 'OptiScaler/' + f)]) {
     if (pe.getBitness(safePath(root, rel)) !== 64) throw fail('errOptiPayload');
   }
-  for (const rel of ['OptiScaler.ini', 'READ ME - DLSS Neural Rendering.txt', ...LICENSES.map(f => 'Licenses/' + f)]) {
+  for (const rel of ['OptiScaler.ini', release.readme, ...LICENSES.map(f => 'Licenses/' + f)]) {
     if (!fs.existsSync(safePath(root, rel))) throw fail('errOptiPayload');
   }
 }
@@ -85,7 +88,7 @@ async function ensureOptiScaler(cacheRoot, version) {
   await extractZip(archive, { dir: base });
   const license = path.join(base, 'OptiScaler-GPL-3.0.txt');
   if (!cached(license, release.licenseHash)) await fetchVerified(release.licenseUrl, release.licenseHash, license);
-  validatePayload(base);
+  validatePayload(base, release);
   return base;
 }
 
@@ -125,13 +128,13 @@ function configure(text, target, release = RELEASE) {
   return out;
 }
 
-function copyPlan(root, api) {
+function copyPlan(root, api, release = releaseFromRoot(root)) {
   return [
     ['OptiScaler.dll', hookFor(api)], ['nvngx.dll_dlssnr.dll', 'nvngx.dll_dlssnr.dll'],
     ...LIBRARIES.map(f => ['OptiScaler/' + f, 'OptiScaler/' + f]),
     ...LICENSES.map(f => ['Licenses/' + f, 'OptiScaler/licenses/' + f]),
     ['OptiScaler-GPL-3.0.txt', 'OptiScaler/licenses/LICENSE.GPL-3.0.txt'],
-    ['READ ME - DLSS Neural Rendering.txt', 'OptiScaler/README-DLSSNR.txt']
+    [release.readme, 'OptiScaler/README-DLSSNR.txt']
   ].map(([from, to]) => ({ from: safePath(root, from), to }));
 }
 
@@ -171,8 +174,8 @@ function checkConflicts(gameDir, exePath, manifest, api) {
 async function install(config, log) {
   const { beginManifest, copyTracked, writeTracked, saveActiveManifest } = require('./apply');
   const { gameDir, exePath, api, optiRoot, source } = config;
-  validatePayload(optiRoot);
   const release = releaseFromRoot(optiRoot);
+  validatePayload(optiRoot, release);
   const nr = source.payload.find(f => f.name.toLowerCase() === 'nvngx_dlssnr.dll');
   if (!nr || pe.getBitness(nr.path) !== 64) throw fail('errNoNeuralRuntime');
   const manifest = beginManifest(gameDir, exePath, api);
@@ -181,7 +184,7 @@ async function install(config, log) {
   manifest.game.apiLabel = config.apiLabel;
   manifest.optiscaler = { version: release.version, mode: release.mode, hook: hookFor(api) };
   const exeDir = path.dirname(exePath);
-  for (const item of copyPlan(optiRoot, api)) {
+  for (const item of copyPlan(optiRoot, api, release)) {
     const rel = await copyTracked(manifest, gameDir, item.from, path.join(exeDir, item.to), { kind: 'optiscaler' });
     log({ code: 'added', params: { rel } });
   }
