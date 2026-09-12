@@ -34,10 +34,16 @@ jobs:
           node --check preload.js
           node --check src/core/presr-bootstrap.js
           node --check src/core/optiscaler.js
-          node --check scripts/test-presr-download.js
           node --check standalone/main.js
           node --check standalone/preload.js
-          node --check standalone/renderer/app.js
+          node --check standalone/core/ini.js
+          node --check standalone/core/download.js
+          node --check standalone/core/file-state.js
+          node --check standalone/core/game-scan.js
+          node --check standalone/core/runtime.js
+          node --check standalone/core/optiscaler.js
+          node --check standalone/core/derived/pe.js
+          node --check scripts/test-presr-download.js
 
       - name: Unit and Pre-SR UI wiring tests
         run: npm test
