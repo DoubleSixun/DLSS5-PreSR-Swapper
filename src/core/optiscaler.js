@@ -8,20 +8,9 @@ const ini = require('./feeder-config');
 const { cached, fetchVerified } = require('./runtime-components');
 const { safePath } = require('./file-journal');
 
-// More than one pinned build, because upgrading one broke a game and there was
-// no way back. Pre-SR is kept as a separate verified backend rather than a
-// user-replaceable component so the installer can preserve its hash guarantees.
+// This fork is Pre-SR-first: the verified performance backend is the default.
+// Standard Post-SR and the older compatibility build remain selectable per game.
 const RELEASES = Object.freeze([
-  Object.freeze({
-    version: '0.2.0-patch1',
-    mode: 'standard',
-    label: 'Standard · Post-SR',
-    readme: 'READ ME - DLSS Neural Rendering.txt',
-    url: 'https://github.com/Dagherbou/OptiScaler_DLSSNR/releases/download/v0.2.0-patch1/OptiScaler-DLSSNR-v0.2.0-onimusha-fix.zip',
-    sha256: '5db547216fa8a7dbd8ab0a193da1e3bce0ea4bd71f91189afa4ed2ede8bb9561',
-    licenseUrl: 'https://raw.githubusercontent.com/Dagherbou/OptiScaler_DLSSNR/393e070/LICENSE',
-    licenseHash: '3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986'
-  }),
   Object.freeze({
     version: '0.7.7-presr',
     upstreamVersion: '0.7.7',
@@ -32,6 +21,16 @@ const RELEASES = Object.freeze([
     sha256: '4a315a3b3ee495631bd7cb1f562f609af577443602e507bfc7a7e6749c296258',
     // Both upstreams are GPL-3.0. Keep using the already pinned canonical text
     // while the Pre-SR source itself is attributed in THIRD_PARTY_NOTICES.
+    licenseUrl: 'https://raw.githubusercontent.com/Dagherbou/OptiScaler_DLSSNR/393e070/LICENSE',
+    licenseHash: '3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986'
+  }),
+  Object.freeze({
+    version: '0.2.0-patch1',
+    mode: 'standard',
+    label: 'Quality · Post-SR (SR → NR)',
+    readme: 'READ ME - DLSS Neural Rendering.txt',
+    url: 'https://github.com/Dagherbou/OptiScaler_DLSSNR/releases/download/v0.2.0-patch1/OptiScaler-DLSSNR-v0.2.0-onimusha-fix.zip',
+    sha256: '5db547216fa8a7dbd8ab0a193da1e3bce0ea4bd71f91189afa4ed2ede8bb9561',
     licenseUrl: 'https://raw.githubusercontent.com/Dagherbou/OptiScaler_DLSSNR/393e070/LICENSE',
     licenseHash: '3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986'
   }),
@@ -50,8 +49,8 @@ const RELEASES = Object.freeze([
 ]);
 const RELEASE = RELEASES[0];
 
-// An unknown name resolves to the current standard build rather than failing:
-// a state file naming a version this app no longer carries must not stop an install.
+// An unknown name resolves to the current default rather than failing: a state
+// file naming a version this app no longer carries must not stop an install.
 const releaseFor = (version) => RELEASES.find((r) => r.version === version) || RELEASE;
 const releaseFromRoot = (root) => {
   const base = path.basename(path.resolve(String(root || '')));
