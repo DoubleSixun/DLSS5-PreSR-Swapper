@@ -1,23 +1,20 @@
 'use strict';
 
 (() => {
-  const sidebarFoot = document.querySelector('.sidebar-foot');
-  if (sidebarFoot) sidebarFoot.remove();
+  const polish = document.createElement('link');
+  polish.rel = 'stylesheet';
+  polish.href = 'compact-ui.css';
+  document.head.appendChild(polish);
 
-  // Non-blocking setting changes should not be re-rendered before their IPC call.
-  // The old helper did that and visually snapped switches back before the update landed.
+  document.querySelector('.sidebar-foot')?.remove();
+
+  // Do not redraw a switch from stale state before a non-blocking IPC update lands.
   act = async function(work, lock = true) {
     if (lock && busy) return;
-    if (lock) {
-      busy = true;
-      render();
-    }
+    if (lock) { busy = true; render(); }
     try { await work(); }
     catch (error) { toast(error.message || String(error)); }
-    finally {
-      if (lock) busy = false;
-      render();
-    }
+    finally { if (lock) busy = false; render(); }
   };
 
   const languageSelect = document.getElementById('languageSelect');
@@ -26,139 +23,133 @@
     const picker = document.createElement('div');
     picker.className = 'language-choice';
     picker.setAttribute('role', 'group');
-    picker.setAttribute('aria-label', 'Language');
-
     const english = document.createElement('button');
     english.type = 'button';
     english.dataset.language = 'en';
-
     const chinese = document.createElement('button');
     chinese.type = 'button';
     chinese.dataset.language = 'zh-CN';
-
     picker.append(english, chinese);
     languageField.appendChild(picker);
 
-    function paint(language) {
+    const paint = language => {
       const zh = language === 'zh-CN';
       english.textContent = zh ? '英语' : 'English';
       chinese.textContent = zh ? '简体中文' : 'Chinese (Simplified)';
       english.classList.toggle('active', !zh);
       chinese.classList.toggle('active', zh);
-      english.setAttribute('aria-pressed', String(!zh));
-      chinese.setAttribute('aria-pressed', String(zh));
-    }
-
-    async function choose(language) {
-      if (!['en', 'zh-CN'].includes(language)) return;
-      english.disabled = true;
-      chinese.disabled = true;
+    };
+    const choose = async language => {
+      english.disabled = chinese.disabled = true;
       try {
         const result = await window.nrApp.setLanguage(language);
         if (!result?.ok) throw new Error(result?.message || 'Unable to change language');
-        paint(language);
         window.location.reload();
       } catch (error) {
-        const toastNode = document.getElementById('toast');
-        if (toastNode) {
-          toastNode.textContent = error.message || String(error);
-          toastNode.classList.add('show');
-          setTimeout(() => toastNode.classList.remove('show'), 2600);
-        }
-        english.disabled = false;
-        chinese.disabled = false;
+        toast(error.message || String(error));
+        english.disabled = chinese.disabled = false;
       }
-    }
-
+    };
     english.addEventListener('click', () => choose('en'));
     chinese.addEventListener('click', () => choose('zh-CN'));
-
-    window.nrApp.getState().then(result => {
-      if (result?.ok) paint(result.value?.language || 'en');
-      else paint('en');
-    }).catch(() => paint('en'));
+    window.nrApp.getState().then(result => paint(result?.value?.language || 'en')).catch(() => paint('en'));
   }
 
-  function copy() {
-    const zh = state.language === 'zh-CN';
-    return zh ? {
-      master: '启用 DLSS 神经渲染',
-      masterBody: '关闭后只停用神经渲染，不会删除 OptiScaler 或运行库文件。',
-      detected: '已检测到现有安装',
-      detectedButton: '现有安装',
-      settingsSaved: '设置已保存。'
-    } : {
-      master: 'Enable DLSS Neural Rendering',
-      masterBody: 'Turn Neural Rendering off without removing OptiScaler or runtime files.',
-      detected: 'Existing NR detected',
-      detectedButton: 'Existing setup',
-      settingsSaved: 'Settings saved.'
-    };
-  }
+  const strings = () => state.language === 'zh-CN' ? {
+    master: '启用 DLSS 神经渲染',
+    masterBody: '关闭后只停用神经渲染，不删除 OptiScaler 或运行库文件。',
+    detected: '已检测到现有安装',
+    detectedButton: '现有安装',
+    info: '工作原理',
+    rescan: '扫描游戏',
+    scanning: '正在扫描 Steam、Epic、GOG、Xbox 和 Ubisoft…',
+    scanDone: count => count ? `扫描完成，新增 ${count} 个兼容游戏。` : '扫描完成，没有发现新的兼容游戏。',
+    saved: '设置已保存。'
+  } : {
+    master: 'Enable DLSS Neural Rendering',
+    masterBody: 'Turn Neural Rendering off without removing OptiScaler or runtime files.',
+    detected: 'Existing NR detected',
+    detectedButton: 'Existing setup',
+    info: 'How it works',
+    rescan: 'Scan games',
+    scanning: 'Scanning Steam, Epic, GOG, Xbox and Ubisoft…',
+    scanDone: count => count ? `Scan complete. Added ${count} compatible game${count === 1 ? '' : 's'}.` : 'Scan complete. No new compatible games found.',
+    saved: 'Settings saved.'
+  };
 
   function ensureMasterRow() {
     let row = document.getElementById('nrMasterRow');
     if (row) return row;
-    const runBeforeRow = document.querySelector('.glass-card .main-setting');
-    if (!runBeforeRow?.parentElement) return null;
-
+    const placement = document.querySelector('.glass-card .main-setting');
+    if (!placement?.parentElement) return null;
     row = document.createElement('div');
     row.id = 'nrMasterRow';
     row.className = 'setting-row main-setting nr-master-setting';
-
     const text = document.createElement('div');
-    const title = document.createElement('strong');
-    title.id = 'nrMasterTitle';
-    const body = document.createElement('p');
-    body.id = 'nrMasterBody';
+    const title = document.createElement('strong'); title.id = 'nrMasterTitle';
+    const body = document.createElement('p'); body.id = 'nrMasterBody';
     text.append(title, body);
-
-    const label = document.createElement('label');
-    label.className = 'switch';
-    label.setAttribute('aria-label', 'DLSS Neural Rendering');
-    const input = document.createElement('input');
-    input.id = 'nrEnabledToggle';
-    input.type = 'checkbox';
-    const thumb = document.createElement('span');
-    label.append(input, thumb);
+    const label = document.createElement('label'); label.className = 'switch';
+    const input = document.createElement('input'); input.id = 'nrEnabledToggle'; input.type = 'checkbox';
+    label.append(input, document.createElement('span'));
     row.append(text, label);
-    runBeforeRow.parentElement.insertBefore(row, runBeforeRow);
-
+    placement.parentElement.insertBefore(row, placement);
     input.addEventListener('change', async event => {
       const game = selectedGame();
       if (!game) return;
       await act(async () => {
         state = unwrap(await window.nrApp.setGameSettings(game.id, { enabled: event.target.checked }));
-        toast(copy().settingsSaved);
+        toast(strings().saved);
       }, false);
     });
     return row;
   }
 
+  function ensureInfoPopover() {
+    if (document.getElementById('nrInfoButton')) return;
+    const heading = document.querySelector('#gameDetail .section-heading');
+    const title = heading?.querySelector('h2');
+    const details = document.querySelector('#gameDetail > .glass-card .details-card');
+    const content = details?.querySelector('.details-content');
+    if (!heading || !title || !details || !content) return;
+
+    const wrap = document.createElement('span');
+    wrap.className = 'nr-info-wrap';
+    const button = document.createElement('button');
+    button.id = 'nrInfoButton';
+    button.type = 'button';
+    button.className = 'nr-info-button';
+    button.textContent = 'ⓘ';
+    const popover = document.createElement('div');
+    popover.className = 'nr-info-popover hidden';
+    popover.appendChild(content);
+    wrap.append(button, popover);
+    title.after(wrap);
+    details.remove();
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      popover.classList.toggle('hidden');
+    });
+    document.addEventListener('click', event => {
+      if (!wrap.contains(event.target)) popover.classList.add('hidden');
+    });
+  }
+
   function decorateHero(game) {
     const hero = document.querySelector('.hero');
     if (!hero) return;
-    let icon = document.getElementById('heroGameIcon');
-    if (!icon) {
-      icon = document.createElement('div');
-      icon.id = 'heroGameIcon';
-      icon.className = 'hero-game-icon';
-      hero.insertBefore(icon, hero.firstChild);
-    }
-    if (game.iconDataUrl) {
-      icon.textContent = '';
-      icon.style.backgroundImage = `url(${game.iconDataUrl})`;
-      icon.classList.add('has-art');
+    if (game.bannerDataUrl) {
+      const url = String(game.bannerDataUrl).replace(/"/g, '%22');
+      hero.style.backgroundImage = `linear-gradient(90deg,rgba(7,13,18,.90) 0%,rgba(7,13,18,.58) 48%,rgba(7,13,18,.18) 100%),url("${url}")`;
+      hero.classList.add('has-banner');
     } else {
-      icon.style.backgroundImage = '';
-      icon.textContent = gameTitle(game).slice(0, 1).toUpperCase();
-      icon.classList.remove('has-art');
+      hero.style.backgroundImage = '';
+      hero.classList.remove('has-banner');
     }
   }
 
   function decorateGameRows() {
     const rows = [...document.querySelectorAll('#gameList .game-row')];
-    if (!state.games.length) return;
     state.games.forEach((game, index) => {
       const avatar = rows[index]?.querySelector('.game-avatar');
       if (!avatar) return;
@@ -174,34 +165,53 @@
     });
   }
 
+  function ensureScanButton() {
+    if (document.getElementById('rescanGamesBtn')) return;
+    const add = document.getElementById('addGameBtn');
+    if (!add?.parentElement) return;
+    const scan = document.createElement('button');
+    scan.id = 'rescanGamesBtn';
+    scan.type = 'button';
+    scan.className = 'ghost compact scan-button';
+    add.parentElement.insertBefore(scan, add);
+    scan.addEventListener('click', async () => {
+      scan.disabled = true;
+      toast(strings().scanning);
+      try {
+        const result = await window.nrApp.rescanGames();
+        if (!result?.ok) throw new Error(result?.message || 'Scan failed');
+        state = result.value.state;
+        render();
+        toast(strings().scanDone(result.value.added || 0));
+      } catch (error) { toast(error.message || String(error)); }
+      finally { scan.disabled = false; }
+    });
+  }
+
   const originalRenderHome = renderHome;
   renderHome = function() {
     originalRenderHome();
+    ensureInfoPopover();
     const game = selectedGame();
     if (!game) return;
-
+    const copy = strings();
     const row = ensureMasterRow();
-    const strings = copy();
     if (row) {
-      document.getElementById('nrMasterTitle').textContent = strings.master;
-      document.getElementById('nrMasterBody').textContent = strings.masterBody;
+      document.getElementById('nrMasterTitle').textContent = copy.master;
+      document.getElementById('nrMasterBody').textContent = copy.masterBody;
       const enabled = document.getElementById('nrEnabledToggle');
       enabled.checked = game.settings?.enabled !== false;
       enabled.disabled = busy;
     }
-
-    // Pre-SR is a placement setting, not the master NR switch. Keep it independently usable.
+    const info = document.getElementById('nrInfoButton');
+    if (info) info.title = copy.info;
     const pre = document.getElementById('presrToggle');
     if (pre) pre.disabled = busy;
-
     if (game.existingSetup && !game.installed) {
       const chip = document.getElementById('installState');
       const install = document.getElementById('installBtn');
-      if (chip) chip.textContent = strings.detected;
-      if (install) {
-        install.textContent = strings.detectedButton;
-        install.disabled = true;
-      }
+      if (chip) chip.textContent = copy.detected;
+      if (install) { install.textContent = copy.detectedButton; install.disabled = true; }
     }
     decorateHero(game);
   };
@@ -209,15 +219,13 @@
   const originalRenderGames = renderGames;
   renderGames = function() {
     originalRenderGames();
+    ensureScanButton();
+    const scan = document.getElementById('rescanGamesBtn');
+    if (scan) scan.textContent = strings().rescan;
     decorateGameRows();
   };
 
   const scroller = document.querySelector('.content');
-  document.querySelectorAll('.nav-item').forEach(button => {
-    button.addEventListener('click', () => {
-      if (scroller) scroller.scrollTop = 0;
-    });
-  });
-
+  document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => { if (scroller) scroller.scrollTop = 0; }));
   render();
 })();
