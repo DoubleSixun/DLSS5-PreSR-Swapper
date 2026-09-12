@@ -21,11 +21,21 @@ const PROFILE_BY_EXE = Object.freeze({
   })
 });
 
+const STYLE_VALUES = new Set(['auto', '0', '1', '2']);
+const DEFAULT_GAME_SETTINGS = Object.freeze({
+  runBeforeSR: true,
+  passes: 1,
+  pass1Style: 'auto',
+  pass2Style: 'auto',
+  pass3Style: 'auto'
+});
+
 let win = null;
 let liveState = null;
 
 const stateFile = () => path.join(app.getPath('userData'), 'standalone-library.json');
 const idFor = exePath => crypto.createHash('sha1').update(path.resolve(exePath).toLowerCase()).digest('hex').slice(0, 16);
+const settingsFor = value => ({ ...DEFAULT_GAME_SETTINGS, ...(value || {}) });
 
 function defaultState() {
   return { language: 'en', selectedGameId: null, games: [] };
@@ -65,7 +75,7 @@ function normalizeRecord(exePath) {
     exePath: resolved,
     profileId: profile?.id || null,
     displayName: path.basename(resolved, path.extname(resolved)),
-    settings: { runBeforeSR: true, passes: 1 }
+    settings: settingsFor()
   };
 }
 
@@ -79,7 +89,7 @@ async function inspectRecord(record) {
     exePath: record.exePath,
     profileId: record.profileId,
     displayName: profile?.names?.[loadState().language] || record.displayName,
-    settings: { runBeforeSR: true, passes: 1, ...(record.settings || {}) },
+    settings: settingsFor(record.settings),
     onlineRisk: Boolean(profile?.onlineRisk),
     chosen: result.chosen,
     dlss: result.dlss,
@@ -98,7 +108,7 @@ async function viewState() {
     catch (error) {
       games.push({
         ...record,
-        settings: { runBeforeSR: true, passes: 1, ...(record.settings || {}) },
+        settings: settingsFor(record.settings),
         scanError: error.message || String(error),
         chosen: null,
         dlss: null,
@@ -185,7 +195,7 @@ ipcMain.handle('games:add', () => safeResult(async () => {
   const state = loadState();
   const existing = state.games.findIndex(game => game.id === record.id);
   if (existing >= 0) {
-    state.games[existing] = { ...state.games[existing], ...record, settings: state.games[existing].settings || record.settings };
+    state.games[existing] = { ...state.games[existing], ...record, settings: settingsFor(state.games[existing].settings) };
   } else {
     state.games.push(record);
   }
@@ -219,12 +229,18 @@ ipcMain.handle('game:open-folder', (_event, id) => safeResult(async () => {
 ipcMain.handle('game:set-settings', (_event, id, settings) => safeResult(async () => {
   const record = recordFor(id);
   if (!record) throw new Error('Unknown game');
-  const next = { runBeforeSR: true, passes: 1, ...(record.settings || {}) };
+  const next = settingsFor(record.settings);
   if (Object.prototype.hasOwnProperty.call(settings || {}, 'runBeforeSR')) next.runBeforeSR = Boolean(settings.runBeforeSR);
   if (Object.prototype.hasOwnProperty.call(settings || {}, 'passes')) {
     const passes = Number(settings.passes);
     if (!Number.isInteger(passes) || passes < 1 || passes > 3) throw new Error('Passes must be 1, 2, or 3');
     next.passes = passes;
+  }
+  for (const key of ['pass1Style', 'pass2Style', 'pass3Style']) {
+    if (!Object.prototype.hasOwnProperty.call(settings || {}, key)) continue;
+    const value = String(settings[key]).toLowerCase();
+    if (!STYLE_VALUES.has(value)) throw new Error('Style must be Default, Standard, Natural, or Cinematic');
+    next[key] = value;
   }
   record.settings = next;
   saveState();
@@ -261,7 +277,7 @@ ipcMain.handle('game:install', (_event, id) => safeResult(async () => {
     apiLabel: inspected.chosen.apiLabel,
     packageRoot,
     runtimePath,
-    settings: record.settings
+    settings: settingsFor(record.settings)
   }, entry => logs.push(entry));
   return { logs, state: await viewState() };
 }));

@@ -73,3 +73,36 @@ test('standalone file state rejects paths outside the managed game root', () => 
   assert.throws(() => fileState.safePath(game, path.join('..', 'outside.dll')), /escapes managed root/);
   assert.equal(fileState.safePath(game, path.join('bin', 'inside.dll')), path.join(game, 'bin', 'inside.dll'));
 });
+
+test('OptiScaler config writes independent styles for all three model passes', () => {
+  const optiscaler = require(path.join(root, 'standalone/core/optiscaler'));
+  const ini = require(path.join(root, 'standalone/core/ini'));
+  const configured = optiscaler.configure('[DlssNr]\r\nEnabled=false', { exePath: path.join(root, 'Game.exe') }, {
+    runBeforeSR: true,
+    passes: 3,
+    pass1Style: '0',
+    pass2Style: '1',
+    pass3Style: '2'
+  });
+  assert.equal(ini.get(configured, 'DlssNr', 'Passes'), '3');
+  assert.equal(ini.get(configured, 'DlssNr', 'Style'), '0');
+  assert.equal(ini.get(configured, 'DlssNr', 'Pass2Style'), '1');
+  assert.equal(ini.get(configured, 'DlssNr', 'Pass3Style'), '2');
+});
+
+test('later pass styles default to backend inheritance', () => {
+  const optiscaler = require(path.join(root, 'standalone/core/optiscaler'));
+  const ini = require(path.join(root, 'standalone/core/ini'));
+  const configured = optiscaler.configure('', { exePath: path.join(root, 'Game.exe') }, { passes: 2 });
+  assert.equal(ini.get(configured, 'DlssNr', 'Style'), 'auto');
+  assert.equal(ini.get(configured, 'DlssNr', 'Pass2Style'), 'auto');
+  assert.equal(ini.get(configured, 'DlssNr', 'Pass3Style'), 'auto');
+});
+
+test('per-pass style controls are present in the standalone UI', () => {
+  const html = read('standalone/renderer/index.html');
+  assert.match(html, /id="pass1Style"/);
+  assert.match(html, /id="pass2Style"/);
+  assert.match(html, /id="pass3Style"/);
+  assert.match(html, /data-i18n="inheritPass1"/);
+});

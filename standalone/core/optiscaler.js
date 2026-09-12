@@ -26,6 +26,7 @@ const LIBRARIES = Object.freeze([
 ]);
 
 const LICENSES = Object.freeze(['DirectX_LICENSE.txt', 'FidelityFX_v2_LICENSE.md', 'RenoDX_ATTRIBUTION.txt', 'XeSS_LICENSE.txt']);
+const STYLE_VALUES = new Set(['auto', '0', '1', '2']);
 
 function fail(code, message = code) {
   return Object.assign(new Error(message), { code });
@@ -62,6 +63,12 @@ async function ensurePackage(cacheRoot) {
   return base;
 }
 
+function styleValue(settings, key) {
+  const value = String(settings?.[key] ?? 'auto').toLowerCase();
+  if (!STYLE_VALUES.has(value)) throw fail('invalidStyle', `Invalid Neural Rendering style: ${value}`);
+  return value;
+}
+
 function configure(text, target, settings = {}) {
   const passes = Number(settings.passes || 1);
   if (!Number.isInteger(passes) || passes < 1 || passes > 3) throw fail('invalidPasses', 'Passes must be 1, 2, or 3.');
@@ -73,6 +80,11 @@ function configure(text, target, settings = {}) {
     ['DlssNr', 'FinishedPicture', 'false'],
     ['DlssNr', 'Passes', String(passes)],
     ['DlssNr', 'WorkingScale', '1.0'],
+    // wilsjo2's multipass backend uses 0=Standard, 1=Natural, 2=Cinematic.
+    // Later-pass `auto` values inherit pass 1, as documented by the backend.
+    ['DlssNr', 'Style', styleValue(settings, 'pass1Style')],
+    ['DlssNr', 'Pass2Style', styleValue(settings, 'pass2Style')],
+    ['DlssNr', 'Pass3Style', styleValue(settings, 'pass3Style')],
     ['Log', 'LogToFile', 'true'],
     ['Log', 'LogLevel', '2'],
     ['Spoofing', 'Dxgi', 'false'],

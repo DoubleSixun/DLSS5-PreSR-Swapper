@@ -10,7 +10,7 @@ The standalone app lives under `standalone/` and launches with:
 npm run start:standalone
 ```
 
-It now has its own Electron main process, preload bridge, renderer, game scanner, INI editor, runtime manager, OptiScaler installer and tracked backup/restore implementation. It does **not** load the upstream `main.js` and no longer imports the upstream `scan.js`, `apply.js`, `feeder-config.js`, `runtime-components.js`, `optiscaler.js` or `presr-bootstrap.js` product modules.
+It has its own Electron main process, preload bridge, renderer, game scanner, INI editor, runtime manager, OptiScaler installer and tracked backup/restore implementation. It does **not** load the upstream `main.js` and does not import the upstream `scan.js`, `apply.js`, `feeder-config.js`, `runtime-components.js`, `optiscaler.js` or `presr-bootstrap.js` product modules.
 
 The standalone product has no Community, Chat, Feeder, RenoDX, emulator or add-on product flow.
 
@@ -31,7 +31,7 @@ The final repository must preserve Rakan Alkhaldi's MIT copyright and permission
 - pinned `wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass` download and checksum verification
 - OptiScaler-only install, conflict checks and tracked restore flow
 - one Neural Rendering installation with `RunBeforeSR` controlling Pre-SR vs after-SR placement
-- per-game pass settings
+- 1–3 pass control and independent Style selection for each pass
 - known-game profiles such as Where Winds Meet
 - English / Simplified Chinese language separation
 - new renderer design
@@ -40,6 +40,8 @@ The final repository must preserve Rakan Alkhaldi's MIT copyright and permission
 ## Neural Rendering backend
 
 The actual Neural Rendering / Pre-SR / multipass implementation is provided by `wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass`, which is based on OptiScaler and Dagherbou's Neural Rendering work. Its GPL-3.0 licence obligations and third-party notices remain separate from the MIT-derived application portions.
+
+The backend documents up to three sequential model passes. `Style=0/1/2` selects Standard/Natural/Cinematic for pass 1; `Pass2Style` and `Pass3Style` select later-pass styles, and `auto` on later passes inherits pass 1. The standalone UI writes those documented keys directly rather than inventing its own style model.
 
 The NVIDIA `nvngx_dlssnr.dll` runtime is not redistributed by this project. The user imports a trusted copy; the app validates it and caches it locally.
 
@@ -54,8 +56,9 @@ The NVIDIA `nvngx_dlssnr.dll` runtime is not redistributed by this project. The 
 - [x] Replace upstream `optiscaler.js` and `runtime-components.js` with a narrowed OptiScaler-only installer/downloader.
 - [x] Replace upstream `apply.js` / `file-journal.js` dependency with a standalone tracked backup/restore implementation while retaining manifest compatibility.
 - [x] Replace upstream `scan.js` dependency with exact-EXE DLSS/API inspection.
+- [x] Add supported 1–3-pass per-pass Style controls (Default/Standard/Natural/Cinematic; later passes can inherit pass 1).
 - [ ] Add tests against real packaged OptiScaler fixtures and migration manifests.
-- [ ] Add multipass per-pass Style/profile controls supported by the wilsjo2 backend.
+- [ ] Decide whether to expose additional documented per-pass Intensity / Local structure / Local tone / Skin structure controls under Advanced.
 - [ ] Build the OptiScaler-focused in-game overlay.
 - [ ] Give the standalone package its final product name, icons and release pipeline.
 - [ ] Create the final independent repository and carry over required licence notices.

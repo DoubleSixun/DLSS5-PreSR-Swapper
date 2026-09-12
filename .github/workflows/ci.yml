@@ -36,6 +36,7 @@ jobs:
           node --check src/core/optiscaler.js
           node --check standalone/main.js
           node --check standalone/preload.js
+          node --check standalone/renderer/app.js
           node --check standalone/core/ini.js
           node --check standalone/core/download.js
           node --check standalone/core/file-state.js

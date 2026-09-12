@@ -6,10 +6,13 @@ const I18N = {
     addFirstGameTitle: 'Add your first game', addFirstGameBody: "Choose the game's main executable. The app will detect DLSS and the rendering API.", addGame: 'Add game',
     gameDetected: 'Game detected', neuralRendering: 'DLSS Neural Rendering', nrDescription: 'Install once, then choose whether Neural Rendering runs before DLSS Super Resolution.',
     runBeforeSr: 'Run before DLSS Super Resolution', runBeforeSrBody: 'Enable Pre-SR. Leave it off to use the normal after-SR placement.', howItWorks: 'How it works',
-    passes: 'Passes', runtime: 'Neural Runtime', install: 'Install Neural Rendering', importRuntime: 'Import runtime', openGameFolder: 'Open game folder', restore: 'Restore original', advanced: 'Advanced details',
+    passes: 'Passes', passStyles: 'Per-pass styles', passStylesHelp: 'Later passes can use their own style. Inherit keeps them linked to Pass 1.',
+    pass1: 'Pass 1', pass2: 'Pass 2', pass3: 'Pass 3', style: 'Style', backendDefault: 'Default', inheritPass1: 'Inherit Pass 1',
+    standard: 'Standard', natural: 'Natural', cinematic: 'Cinematic', activeLayer: 'Active', inactiveLayer: 'Inactive',
+    runtime: 'Neural Runtime', install: 'Install Neural Rendering', importRuntime: 'Import runtime', openGameFolder: 'Open game folder', restore: 'Restore original', advanced: 'Advanced details',
     inGame: 'In game:', keepDlssOn: 'keep DLSS Super Resolution enabled. Quality / Balanced / Performance remains a game setting.',
     gamesBody: 'Games managed by this app.', settingsBody: 'Keep the interface in one language at a time.', language: 'Language', creditsTitle: 'Credits',
-    creditsBody: "Game discovery, compatibility detection and file backup/restore include portions derived from DLSS5-Swapper by Rakan Alkhaldi under the MIT License. Neural Rendering backend integration targets wilsjo2's OptiScaler-DLSSNR-PreSR-Multipass.",
+    creditsBody: "Parts of PE/game compatibility inspection are derived from DLSS5-Swapper by Rakan Alkhaldi under the MIT License. Neural Rendering backend integration targets wilsjo2's OptiScaler-DLSSNR-PreSR-Multipass.",
     ready: 'Ready', installed: 'Installed', missing: 'Missing', runtimeReady: 'Ready', preSr: 'Pre-SR enabled', afterSr: 'After-SR placement',
     preSrLine: "Neural Rendering runs before the game's DLSS upscaling.", afterSrLine: 'Neural Rendering runs after DLSS Super Resolution.',
     preSrPipeline: 'Render → Neural Rendering → DLSS Super Resolution → Output', afterSrPipeline: 'Render → DLSS Super Resolution → Neural Rendering → Output',
@@ -24,10 +27,13 @@ const I18N = {
     addFirstGameTitle: '添加你的第一个游戏', addFirstGameBody: '选择游戏主程序，应用会自动检测 DLSS 和渲染 API。', addGame: '添加游戏',
     gameDetected: '已检测到游戏', neuralRendering: 'DLSS 神经渲染', nrDescription: '只需安装一次，然后决定神经渲染是否在 DLSS 超分之前运行。',
     runBeforeSr: '在 DLSS 超分前运行', runBeforeSrBody: '开启即使用 Pre-SR；关闭则使用常规的超分后位置。', howItWorks: '工作原理',
-    passes: '叠加层数', runtime: '神经渲染运行库', install: '安装神经渲染', importRuntime: '导入运行库', openGameFolder: '打开游戏目录', restore: '恢复原文件', advanced: '高级信息',
+    passes: '叠加层数', passStyles: '每层风格', passStylesHelp: '后续层可以使用不同风格；选择继承时会跟随第 1 层。',
+    pass1: '第 1 层', pass2: '第 2 层', pass3: '第 3 层', style: '风格', backendDefault: '默认', inheritPass1: '继承第 1 层',
+    standard: '标准', natural: '自然', cinematic: '电影', activeLayer: '已启用', inactiveLayer: '未启用',
+    runtime: '神经渲染运行库', install: '安装神经渲染', importRuntime: '导入运行库', openGameFolder: '打开游戏目录', restore: '恢复原文件', advanced: '高级信息',
     inGame: '游戏内：', keepDlssOn: '保持 DLSS 超分开启；质量、平衡、性能等档位仍由游戏设置决定。',
     gamesBody: '由本应用管理的游戏。', settingsBody: '界面在同一时间只显示一种语言。', language: '语言', creditsTitle: '鸣谢',
-    creditsBody: '游戏发现、兼容性检测以及文件备份/恢复的部分代码源自 Rakan Alkhaldi 的 DLSS5-Swapper，并依照 MIT License 使用。神经渲染后端集成面向 wilsjo2 的 OptiScaler-DLSSNR-PreSR-Multipass。',
+    creditsBody: 'PE 与游戏兼容性检测的部分代码源自 Rakan Alkhaldi 的 DLSS5-Swapper，并依照 MIT License 使用。神经渲染后端集成面向 wilsjo2 的 OptiScaler-DLSSNR-PreSR-Multipass。',
     ready: '就绪', installed: '已安装', missing: '缺失', runtimeReady: '已就绪', preSr: 'Pre-SR 已开启', afterSr: '超分后运行',
     preSrLine: '神经渲染会在游戏的 DLSS 超分之前运行。', afterSrLine: '神经渲染会在 DLSS 超分之后运行。',
     preSrPipeline: '渲染 → 神经渲染 → DLSS 超分 → 输出', afterSrPipeline: '渲染 → DLSS 超分 → 神经渲染 → 输出',
@@ -87,6 +93,25 @@ function techItem(label, value) {
   return node;
 }
 
+function renderPassStyles(game) {
+  const passes = Number(game.settings?.passes || 1);
+  const fields = [
+    [1, 'pass1Style'],
+    [2, 'pass2Style'],
+    [3, 'pass3Style']
+  ];
+  for (const [pass, key] of fields) {
+    const select = $(key);
+    const active = pass <= passes;
+    select.value = String(game.settings?.[key] ?? 'auto');
+    select.disabled = busy || !active;
+    const card = document.querySelector(`[data-pass-card="${pass}"]`);
+    card?.classList.toggle('inactive', !active);
+    const status = $(`pass${pass}State`);
+    if (status) status.textContent = active ? t('activeLayer') : t('inactiveLayer');
+  }
+}
+
 function renderMode(game) {
   const pre = game.settings?.runBeforeSR !== false;
   $('modeBadge').textContent = pre ? t('preSr') : t('afterSr');
@@ -95,6 +120,7 @@ function renderMode(game) {
   $('pipelineExplain').textContent = pre ? t('preSrExplain') : t('afterSrExplain');
   $('presrToggle').checked = pre;
   $('passesSelect').value = String(game.settings?.passes || 1);
+  renderPassStyles(game);
 }
 
 function renderHome() {
@@ -258,6 +284,17 @@ $('passesSelect').addEventListener('change', async event => {
     toast(t('settingsSaved'));
   }, false);
 });
+
+for (const [id, key] of [['pass1Style', 'pass1Style'], ['pass2Style', 'pass2Style'], ['pass3Style', 'pass3Style']]) {
+  $(id).addEventListener('change', async event => {
+    const game = selectedGame();
+    if (!game) return;
+    await act(async () => {
+      state = unwrap(await window.nrApp.setGameSettings(game.id, { [key]: event.target.value }));
+      toast(t('settingsSaved'));
+    }, false);
+  });
+}
 
 $('runtimeBtn').addEventListener('click', async () => {
   const game = selectedGame();
