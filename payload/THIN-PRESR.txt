@@ -1,0 +1,9 @@
+DLSS 5 Pre-SR Swapper thin payload
+
+This package intentionally does not redistribute NVIDIA nvngx_dlssnr.dll.
+On the first OptiScaler / Pre-SR install, the app asks the user to select a trusted
+copy of nvngx_dlssnr.dll, validates that it is a 64-bit NVIDIA PE binary, then
+caches that user-supplied file under the app data directory.
+
+The OptiScaler Pre-SR backend itself is downloaded from its pinned upstream
+release and verified by SHA-256 at install time.
