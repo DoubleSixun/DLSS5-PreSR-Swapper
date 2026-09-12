@@ -5,6 +5,7 @@
   "main": "presr-main.js",
   "scripts": {
     "start": "electron .",
+    "start:standalone": "electron standalone",
     "test": "node --test --test-concurrency=1 test/*.test.js",
     "test:ui": "electron scripts/test-game-filters-ui.js",
     "test:payload": "node scripts/test-feeder-payload.js",

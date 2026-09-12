@@ -35,6 +35,9 @@ jobs:
           node --check src/core/presr-bootstrap.js
           node --check src/core/optiscaler.js
           node --check scripts/test-presr-download.js
+          node --check standalone/main.js
+          node --check standalone/preload.js
+          node --check standalone/renderer/app.js
 
       - name: Unit and Pre-SR UI wiring tests
         run: npm test
