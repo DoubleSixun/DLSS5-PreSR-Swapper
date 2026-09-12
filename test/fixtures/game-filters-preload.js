@@ -17,6 +17,7 @@ let copyFailure = false;
 let nextMenuAction = null;
 let gameMenuCalls = [];
 let gameActionCalls = [];
+let communityNoticesOn = true;
 const apiOverrides = new Map();
 let detectedApi = { api: 'dxgi', apiLabel: 'DirectX 12', bitness: 64 };
 let apiSaveFailure = false;
@@ -42,6 +43,12 @@ contextBridge.exposeInMainWorld('lab', {
   library: async () => { libraryReads++; return games; },
   settings: async () => ({ groupGamesByStore, folders: [], roots: [], stateFile: 'test', posterDir: 'test', posterCount: 0, autoScanDrives: false }),
   setGroupGamesByStore: async (enabled) => { groupGamesByStore = enabled; return enabled; },
+  communityNoticeSettings: async (on) => {
+    if (typeof on === 'boolean') communityNoticesOn = on;
+    return { on: communityNoticesOn };
+  },
+  setCloseToTray: async enabled => enabled,
+  setAutoScanDrives: async enabled => enabled,
   testLibraryReads: () => libraryReads,
   recents: async () => [],
   history: async () => {
