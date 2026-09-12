@@ -6,8 +6,10 @@ const path = require('path');
 const opti = require('../src/core/optiscaler');
 const ini = require('../src/core/feeder-config');
 
-test('Pre-SR backend is pinned and hash-verified', () => {
+test('Pre-SR backend is pinned, verified and the default', () => {
   const release = opti.releaseFor('0.7.7-presr');
+  assert.equal(opti.RELEASE.version, '0.7.7-presr');
+  assert.equal(opti.RELEASE.mode, 'presr');
   assert.equal(release.mode, 'presr');
   assert.equal(release.upstreamVersion, '0.7.7');
   assert.equal(release.readme, 'INSTALL-DLSSNR.md');
@@ -27,7 +29,8 @@ test('Pre-SR configuration enables NR before Super Resolution', () => {
 });
 
 test('standard OptiScaler remains Post-SR', () => {
-  const out = opti.configure('[DlssNr]\nRunBeforeSR=true\n', { exePath: 'game.exe' }, opti.RELEASE);
+  const standard = opti.releaseFor('0.2.0-patch1');
+  const out = opti.configure('[DlssNr]\nRunBeforeSR=true\n', { exePath: 'game.exe' }, standard);
   assert.equal(ini.getIni(out, 'DlssNr', 'RunBeforeSR'), 'false');
 });
 
