@@ -35,3 +35,6 @@ jobs:
 
       - name: Unit tests
         run: npm test
+
+      - name: Electron UI smoke test
+        run: npm run test:ui
