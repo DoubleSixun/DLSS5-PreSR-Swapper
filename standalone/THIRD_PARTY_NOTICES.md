@@ -1,10 +1,10 @@
 # Third-party notices
 
-This standalone application is MIT-licensed, but it interacts with or contains small portions derived from independently licensed projects. Those projects remain under their own licences.
+This standalone application is MIT-licensed, but it interacts with or contains portions derived from independently licensed projects. Those projects remain under their own licences.
 
 ## DLSS5-Swapper
 
-A small, isolated part of the PE/game compatibility inspection code in `standalone/core/derived/pe.js` is derived from DLSS5-Swapper by Rakan Alkhaldi and is used under the MIT License.
+Parts of the PE/game compatibility inspection code in `standalone/core/derived/pe.js` and launcher/game-library discovery logic in `standalone/core/derived/library.js` are derived from DLSS5-Swapper by Rakan Alkhaldi and are used under the MIT License.
 
 MIT License
 
