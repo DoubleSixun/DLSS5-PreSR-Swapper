@@ -96,16 +96,18 @@ function cacheRuntime(app, source) {
 
   const dest = runtimeCacheFile(app);
   const dir = path.dirname(dest);
-  fs.mkdirSync(dir, { recursive: true });
-  const temp = dest + '.tmp';
-  fs.copyFileSync(source, temp);
-  if (!runtimeLooksValid(temp)) {
-    fs.rmSync(temp, { force: true });
+  const stagingDir = path.join(dir, '.import');
+  const staged = path.join(stagingDir, RUNTIME_NAME);
+  fs.mkdirSync(stagingDir, { recursive: true });
+  fs.copyFileSync(source, staged);
+  if (!runtimeLooksValid(staged)) {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
     throw fail('errNoNeuralRuntime', 'The selected NVIDIA runtime could not be validated after copying.');
   }
 
   fs.rmSync(dest, { force: true });
-  fs.renameSync(temp, dest);
+  fs.renameSync(staged, dest);
+  fs.rmSync(stagingDir, { recursive: true, force: true });
   const metadata = {
     file: RUNTIME_NAME,
     sha256: sha256(dest),
