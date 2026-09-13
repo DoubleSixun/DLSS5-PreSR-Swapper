@@ -50,9 +50,13 @@ test('existing OptiScaler setup can migrate through managed backup and restore',
   assert.match(optiscaler, /migratedExisting/);
 });
 
-test('compact native overlay stays hidden until its shortcut opens it', () => {
+test('compact native overlay preserves OptiScaler menu visibility and input lifecycle', () => {
   const patch = read('scripts/patch-optiscaler-compact-overlay.py');
-  assert.match(patch, /if \(!_isVisible\)/);
+  assert.match(patch, /TABLE_SIGNATURE = "void MenuCommon::RenderMainMenuTable/);
+  assert.match(patch, /Do not patch RenderMainMenuWindow/);
+  assert.doesNotMatch(patch, /REPLACEMENT\s*=\s*r'''void MenuCommon::RenderMainMenuWindow/);
+  assert.match(patch, /io\.WantCaptureKeyboard = false/);
+  assert.match(patch, /io\.WantCaptureMouse = false/);
   assert.match(patch, /DoubleSixunCompactOverlay/);
 });
 
