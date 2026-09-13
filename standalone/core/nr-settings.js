@@ -106,6 +106,10 @@ function applyOverlay(exePath, preferences = DEFAULT_OVERLAY) {
   const values = [
     ['ShortcutKey', overlay.enabled ? String(overlay.hotkey) : '-1'],
     ['Scale', overlay.scale.toFixed(2)],
+    // The compact panel now stays inside OptiScaler's stock main-menu host.
+    // BGColorA controls that host's background alpha; keep FpsOverlayAlpha in
+    // sync for legacy builds and the lightweight performance overlay.
+    ['BGColorA', overlay.opacity.toFixed(2)],
     ['FpsOverlayAlpha', overlay.opacity.toFixed(2)],
     ['FpsOverlayPos', String(overlay.position)],
     ['DisableSplash', 'true'],
