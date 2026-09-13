@@ -3,6 +3,8 @@
 const I18N = {
   en: {
     productSubtitle: 'Neural Rendering Manager', home: 'Home', games: 'Games', settings: 'Settings', standaloneCore: 'Standalone core',
+    homeTitle: 'Find compatible games', homeBody: 'Scan your installed game libraries for native DLSS titles that can use Neural Rendering.', scanGames: 'Scan games',
+    compatibleGames: 'Compatible games', installedGames: 'Neural Rendering installed', openLibrary: 'Open game library', scanningGames: 'Scanning installed game libraries…',
     addFirstGameTitle: 'Add your first game', addFirstGameBody: "Choose the game's main executable. The app will detect DLSS and the rendering API.", addGame: 'Add game',
     gameDetected: 'Game detected', neuralRendering: 'DLSS Neural Rendering', nrDescription: 'Install once, then choose whether Neural Rendering runs before DLSS Super Resolution.',
     runBeforeSr: 'Run before DLSS Super Resolution', runBeforeSrBody: 'Enable Pre-SR. Leave it off to use the normal after-SR placement.', howItWorks: 'How it works',
@@ -11,7 +13,7 @@ const I18N = {
     standard: 'Standard', natural: 'Natural', cinematic: 'Cinematic', activeLayer: 'Active', inactiveLayer: 'Inactive',
     runtime: 'Neural Runtime', install: 'Install Neural Rendering', importRuntime: 'Import runtime', openGameFolder: 'Open game folder', restore: 'Restore original', advanced: 'Advanced details',
     inGame: 'In game:', keepDlssOn: 'keep DLSS Super Resolution enabled. Quality / Balanced / Performance remains a game setting.',
-    gamesBody: 'Games managed by this app.', settingsBody: 'Keep the interface in one language at a time.', language: 'Language', creditsTitle: 'Credits',
+    gamesBody: 'Compatible games found on this PC.', settingsBody: 'Keep the interface in one language at a time.', language: 'Language', creditsTitle: 'Credits',
     creditsBody: "Parts of PE/game compatibility inspection are derived from DLSS5-Swapper by Rakan Alkhaldi under the MIT License. Neural Rendering backend integration targets wilsjo2's OptiScaler-DLSSNR-PreSR-Multipass.",
     ready: 'Ready', installed: 'Installed', missing: 'Missing', runtimeReady: 'Ready', preSr: 'Pre-SR enabled', afterSr: 'After-SR placement',
     preSrLine: "Neural Rendering runs before the game's DLSS upscaling.", afterSrLine: 'Neural Rendering runs after DLSS Super Resolution.',
@@ -24,6 +26,8 @@ const I18N = {
   },
   'zh-CN': {
     productSubtitle: '神经渲染管理器', home: '主页', games: '游戏', settings: '设置', standaloneCore: '独立核心',
+    homeTitle: '扫描支持神经渲染的游戏', homeBody: '扫描已安装的游戏库，查找带原生 DLSS、可使用神经渲染的游戏。', scanGames: '扫描游戏',
+    compatibleGames: '兼容游戏', installedGames: '已安装神经渲染', openLibrary: '打开游戏库', scanningGames: '正在扫描已安装的游戏库…',
     addFirstGameTitle: '添加你的第一个游戏', addFirstGameBody: '选择游戏主程序，应用会自动检测 DLSS 和渲染 API。', addGame: '添加游戏',
     gameDetected: '已检测到游戏', neuralRendering: 'DLSS 神经渲染', nrDescription: '只需安装一次，然后决定神经渲染是否在 DLSS 超分之前运行。',
     runBeforeSr: '在 DLSS 超分前运行', runBeforeSrBody: '开启即使用 Pre-SR；关闭则使用常规的超分后位置。', howItWorks: '工作原理',
@@ -32,14 +36,14 @@ const I18N = {
     standard: '标准', natural: '自然', cinematic: '电影', activeLayer: '已启用', inactiveLayer: '未启用',
     runtime: '神经渲染运行库', install: '安装神经渲染', importRuntime: '导入运行库', openGameFolder: '打开游戏目录', restore: '恢复原文件', advanced: '高级信息',
     inGame: '游戏内：', keepDlssOn: '保持 DLSS 超分开启；质量、平衡、性能等档位仍由游戏设置决定。',
-    gamesBody: '由本应用管理的游戏。', settingsBody: '界面在同一时间只显示一种语言。', language: '语言', creditsTitle: '鸣谢',
+    gamesBody: '本机扫描到的兼容游戏。', settingsBody: '界面在同一时间只显示一种语言。', language: '语言', creditsTitle: '鸣谢',
     creditsBody: 'PE 与游戏兼容性检测的部分代码源自 Rakan Alkhaldi 的 DLSS5-Swapper，并依照 MIT License 使用。神经渲染后端集成面向 wilsjo2 的 OptiScaler-DLSSNR-PreSR-Multipass。',
     ready: '就绪', installed: '已安装', missing: '缺失', runtimeReady: '已就绪', preSr: 'Pre-SR 已开启', afterSr: '超分后运行',
     preSrLine: '神经渲染会在游戏的 DLSS 超分之前运行。', afterSrLine: '神经渲染会在 DLSS 超分之后运行。',
     preSrPipeline: '渲染 → 神经渲染 → DLSS 超分 → 输出', afterSrPipeline: '渲染 → DLSS 超分 → 神经渲染 → 输出',
     preSrExplain: 'Pre-SR 通常能降低 GPU 开销，因为神经渲染处理的是较低的内部渲染分辨率；游戏内的 DLSS 档位仍然控制超分。',
     afterSrExplain: '关闭 Pre-SR 后，神经渲染会处理已经完成 DLSS 超分的较高分辨率画面。',
-    backend: '后端', executable: '主程序', notDetected: '未检测到', noGames: '还没有添加游戏。', remove: '移除', select: '打开',
+    backend: '后端', executable: '主程序', notDetected: '未检测到', noGames: '还没有游戏。', remove: '移除', select: '打开',
     installComplete: '神经渲染安装成功。', restoreComplete: '已恢复原文件。', settingsSaved: '设置已保存。', runtimeImported: '运行库已导入。',
     whereWindsMeet: '燕云十六声', scanFailed: '扫描失败', working: '处理中…'
   }
@@ -48,6 +52,7 @@ const I18N = {
 let state = { language: 'en', selectedGameId: null, games: [] };
 let currentPage = 'home';
 let busy = false;
+let scanMessage = '';
 
 const $ = id => document.getElementById(id);
 const t = key => (I18N[state.language] || I18N.en)[key] || key;
@@ -95,11 +100,7 @@ function techItem(label, value) {
 
 function renderPassStyles(game) {
   const passes = Number(game.settings?.passes || 1);
-  const fields = [
-    [1, 'pass1Style'],
-    [2, 'pass2Style'],
-    [3, 'pass3Style']
-  ];
+  const fields = [[1, 'pass1Style'], [2, 'pass2Style'], [3, 'pass3Style']];
   for (const [pass, key] of fields) {
     const select = $(key);
     const active = pass <= passes;
@@ -124,16 +125,21 @@ function renderMode(game) {
 }
 
 function renderHome() {
+  $('homeGameCount').textContent = String(state.games.length);
+  $('homeInstalledCount').textContent = String(state.games.filter(game => game.installed || game.existingSetup).length);
+  $('homeScanBtn').disabled = busy;
+  $('homeAddBtn').disabled = busy;
+  $('homeOpenGamesBtn').disabled = busy || !state.games.length;
+  $('homeScanStatus').textContent = busy && currentPage === 'home' ? t('scanningGames') : scanMessage;
+}
+
+function renderGame() {
   const game = selectedGame();
-  $('emptyState').classList.toggle('hidden', Boolean(game));
+  $('gameEmptyState').classList.toggle('hidden', Boolean(game));
   $('gameDetail').classList.toggle('hidden', !game);
-  if (!game) {
-    $('crumb').textContent = 'DLSS NR';
-    return;
-  }
+  if (!game) return;
 
   $('gameTitle').textContent = gameTitle(game);
-  $('crumb').textContent = gameTitle(game);
   const badges = $('badges');
   badges.replaceChildren();
   if (game.chosen?.apiLabel) badges.appendChild(badge(game.chosen.apiLabel));
@@ -206,7 +212,7 @@ function renderGames() {
     row.addEventListener('click', async () => {
       await act(async () => {
         state = unwrap(await window.nrApp.selectGame(game.id));
-        showPage('home');
+        showPage('game');
       }, false);
     });
     list.appendChild(row);
@@ -216,9 +222,13 @@ function renderGames() {
 function render() {
   applyLanguage();
   renderHome();
+  renderGame();
   renderGames();
   document.querySelectorAll('.page').forEach(page => page.classList.toggle('active', page.id === `page-${currentPage}`));
-  document.querySelectorAll('.nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.page === currentPage));
+  const navPage = currentPage === 'game' ? 'games' : currentPage;
+  document.querySelectorAll('.nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.page === navPage));
+  const game = selectedGame();
+  $('crumb').textContent = currentPage === 'game' && game ? gameTitle(game) : t(currentPage === 'game' ? 'games' : currentPage);
 }
 
 function showPage(page) {
@@ -247,6 +257,18 @@ async function act(work, lock = true) {
   }
 }
 
+async function scanGames() {
+  await act(async () => {
+    const result = unwrap(await window.nrApp.rescanGames());
+    state = result.state;
+    const count = Number(result.added || 0);
+    scanMessage = state.language === 'zh-CN'
+      ? (count ? `扫描完成，新增 ${count} 个兼容游戏。` : '扫描完成，没有发现新的兼容游戏。')
+      : (count ? `Scan complete. Added ${count} compatible game${count === 1 ? '' : 's'}.` : 'Scan complete. No new compatible games found.');
+    toast(scanMessage);
+  });
+}
+
 async function refresh() {
   state = unwrap(await window.nrApp.getState());
   render();
@@ -256,15 +278,25 @@ document.querySelectorAll('.nav-item').forEach(btn => btn.addEventListener('clic
 $('minBtn').addEventListener('click', () => window.nrApp.minimize());
 $('maxBtn').addEventListener('click', () => window.nrApp.maximize());
 $('closeBtn').addEventListener('click', () => window.nrApp.close());
+$('homeScanBtn').addEventListener('click', scanGames);
+$('homeOpenGamesBtn').addEventListener('click', () => showPage('games'));
+$('gameBackBtn').addEventListener('click', () => showPage('games'));
 
 async function addGame() {
-  await act(async () => { state = unwrap(await window.nrApp.addGame()); showPage('home'); });
+  const beforeId = state.selectedGameId;
+  const beforeCount = state.games.length;
+  await act(async () => {
+    const next = unwrap(await window.nrApp.addGame());
+    const changed = next.games.length !== beforeCount || next.selectedGameId !== beforeId;
+    state = next;
+    if (changed) showPage('game');
+  });
 }
-$('emptyAddBtn').addEventListener('click', addGame);
+$('homeAddBtn').addEventListener('click', addGame);
 $('addGameBtn').addEventListener('click', addGame);
 
 $('languageSelect').addEventListener('change', async event => {
-  await act(async () => { state = unwrap(await window.nrApp.setLanguage(event.target.value)); }, false);
+  await act(async () => { state = unwrap(await window.nrApp.setLanguage(event.target.value)); scanMessage = ''; }, false);
 });
 
 $('presrToggle').addEventListener('change', async event => {
