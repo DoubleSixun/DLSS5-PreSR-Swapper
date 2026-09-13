@@ -53,11 +53,12 @@ test('existing OptiScaler setup can migrate through managed backup and restore',
 test('compact native overlay preserves OptiScaler menu visibility and input lifecycle', () => {
   const patch = read('scripts/patch-optiscaler-compact-overlay.py');
   assert.match(patch, /TABLE_SIGNATURE = "void MenuCommon::RenderMainMenuTable/);
-  assert.match(patch, /Do not patch RenderMainMenuWindow/);
+  assert.match(patch, /Preserve RenderMainMenuWindow/);
   assert.doesNotMatch(patch, /REPLACEMENT\s*=\s*r'''void MenuCommon::RenderMainMenuWindow/);
   assert.match(patch, /io\.WantCaptureKeyboard = false/);
   assert.match(patch, /io\.WantCaptureMouse = false/);
   assert.match(patch, /DoubleSixunCompactOverlay/);
+  assert.match(patch, /DoubleSixunCompactHost/);
 });
 
 test('Settings removes the redundant one-language description', () => {
