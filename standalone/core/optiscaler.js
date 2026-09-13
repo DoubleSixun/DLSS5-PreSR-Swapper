@@ -10,7 +10,7 @@ const fileState = require('./file-state');
 
 const RELEASE = Object.freeze({
   version: '0.7.7',
-  packageId: '0.7.7-dlss5mgr2',
+  packageId: '0.7.7-dlss5mgr3',
   url: 'https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass/releases/download/v0.7.7/OptiScaler-DLSSNR-v0.7.7.zip',
   sha256: '4a315a3b3ee495631bd7cb1f562f609af577443602e507bfc7a7e6749c296258',
   readme: 'INSTALL-DLSSNR.md',
@@ -105,6 +105,14 @@ function configure(text, target, settings = {}) {
     ['Menu', 'FpsOverlayPos', '1'],
     ['Menu', 'DisableSplash', 'true'],
     ['Menu', 'OverlayMenu', 'true'],
+    // This fork documents ManualInputPolling as the fallback for games where the
+    // menu is visible but the normal window/input queue never reaches ImGui. It
+    // also avoids relying on OptiScaler to block game input while our compact menu
+    // is open, which is safer for titles that stall during loading transitions.
+    ['Hotfix', 'ManualInputPolling', 'true'],
+    // The manager pins and builds its own backend revision; the upstream OptiScaler
+    // update banner is therefore misleading inside a managed installation.
+    ['Hotfix', 'CheckForUpdate', 'false'],
     ['Log', 'LogToFile', 'true'],
     ['Log', 'LogLevel', '2'],
     ['Spoofing', 'Dxgi', 'false'],
