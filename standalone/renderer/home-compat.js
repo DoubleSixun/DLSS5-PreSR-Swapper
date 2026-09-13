@@ -5,6 +5,7 @@
 // Library page and make every page transition reset the shared content scroller.
 (() => {
   const scroller = document.querySelector('.content');
+  const MANAGER_BACKEND_ID = '0.7.7-dlss5mgr3';
 
   if (I18N?.en) {
     I18N.en.games = 'Library';
@@ -36,6 +37,9 @@
 
   const isCompatible = game => Boolean(game?.compatible || (game?.chosen && game?.dlss && game.chosen.bitness === 64 && game.chosen.api));
   const isConfigured = game => Boolean(game?.installed || game?.existingSetup);
+  const needsBackendUpdate = game => Boolean(
+    game?.installed && game?.hasBackup && game?.optiscaler?.version && game.optiscaler.version !== MANAGER_BACKEND_ID
+  );
   let libraryFilter = 'all';
 
   const copy = () => state.language === 'zh-CN' ? {
@@ -48,6 +52,10 @@
     incompatibleTag: '不兼容',
     configuredTag: '已配置',
     empty: '没有符合当前筛选条件的游戏。',
+    updateBackend: '更新游戏内后端',
+    updatingBackend: '正在更新…',
+    backendUpdated: '游戏内后端已更新。请重新启动游戏后再测试 Overlay。',
+    languageError: '语言切换失败。',
     summary: (all, compatible, configured) => `${all} 个已安装游戏 · ${compatible} 个兼容 · ${configured} 个已配置`
   } : {
     scan: 'Scan games',
@@ -59,6 +67,10 @@
     incompatibleTag: 'Not compatible',
     configuredTag: 'Configured',
     empty: 'No games match this filter.',
+    updateBackend: 'Update in-game backend',
+    updatingBackend: 'Updating…',
+    backendUpdated: 'In-game backend updated. Restart the game before testing the overlay.',
+    languageError: 'Unable to change language.',
     summary: (all, compatible, configured) => `${all} installed · ${compatible} compatible · ${configured} configured`
   };
 
@@ -186,7 +198,109 @@
     }
   };
 
+  function installImmediateLanguagePicker() {
+    const oldPicker = document.querySelector('.language-choice');
+    if (!oldPicker?.parentElement) return () => {};
+
+    // ux-fixes.js originally waits for the main process to rescan every game and then
+    // reloads the page. Replace those listeners with an optimistic UI update: the
+    // visible interface switches immediately while persistence finishes in the background.
+    const picker = oldPicker.cloneNode(false);
+    oldPicker.replaceWith(picker);
+    const english = document.createElement('button');
+    const chinese = document.createElement('button');
+    english.type = chinese.type = 'button';
+    english.dataset.language = 'en';
+    chinese.dataset.language = 'zh-CN';
+    picker.append(english, chinese);
+
+    const paint = () => {
+      const zh = state.language === 'zh-CN';
+      english.textContent = zh ? '英语' : 'English';
+      chinese.textContent = zh ? '简体中文' : 'Chinese (Simplified)';
+      english.classList.toggle('active', !zh);
+      chinese.classList.toggle('active', zh);
+    };
+
+    const choose = async language => {
+      if (language === state.language) return;
+      const previous = state.language;
+      state = { ...state, language };
+      paint();
+      render();
+      english.disabled = chinese.disabled = true;
+      try {
+        const result = await window.nrApp.setLanguage(language);
+        if (!result?.ok) throw new Error(result?.message || copy().languageError);
+        if (result.value && typeof result.value === 'object') state = { ...state, ...result.value, language };
+      } catch (error) {
+        state = { ...state, language: previous };
+        toast(error.message || String(error));
+      } finally {
+        english.disabled = chinese.disabled = false;
+        paint();
+        render();
+      }
+    };
+
+    english.addEventListener('click', () => choose('en'));
+    chinese.addEventListener('click', () => choose('zh-CN'));
+    paint();
+    return paint;
+  }
+
+  function ensureBackendUpdateButton() {
+    let button = document.getElementById('backendUpdateBtn');
+    const install = document.getElementById('installBtn');
+    if (!install?.parentElement) return null;
+    if (!button) {
+      button = document.createElement('button');
+      button.id = 'backendUpdateBtn';
+      button.type = 'button';
+      button.className = 'primary install-button hidden';
+      install.after(button);
+      button.addEventListener('click', async () => {
+        const game = selectedGame();
+        if (!game || !needsBackendUpdate(game) || busy) return;
+        const c = copy();
+        button.disabled = true;
+        button.textContent = c.updatingBackend;
+        await act(async () => {
+          // Keep the original backup contract intact: first restore the previous
+          // manager-owned DLLs, then install the current backend revision. If this
+          // game originally had a foreign OptiScaler setup, the normal migration
+          // confirmation is shown again before touching it.
+          const restored = unwrap(await window.nrApp.restore(game.id));
+          if (restored?.state) state = restored.state;
+          const installed = unwrap(await window.nrApp.install(game.id));
+          if (installed?.state) state = installed.state;
+          if (!installed?.cancelled) toast(c.backendUpdated);
+        });
+      });
+    }
+    return button;
+  }
+
+  const paintBackendUpdate = () => {
+    const button = ensureBackendUpdateButton();
+    const install = document.getElementById('installBtn');
+    if (!button || !install) return;
+    const stale = needsBackendUpdate(selectedGame());
+    button.classList.toggle('hidden', !stale);
+    install.classList.toggle('hidden', stale);
+    button.textContent = copy().updateBackend;
+    button.disabled = busy || !stale;
+  };
+
   ensureLibraryToolbar();
+  const paintLanguage = installImmediateLanguagePicker();
+  const baseRender = render;
+  render = function() {
+    baseRender();
+    paintLanguage();
+    paintBackendUpdate();
+  };
+
   currentPage = currentPage === 'settings' ? 'settings' : 'games';
   if (scroller) scroller.scrollTop = 0;
   render();
