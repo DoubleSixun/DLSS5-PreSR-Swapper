@@ -86,6 +86,7 @@ function normalizeRecord(exePath, meta = {}) {
     storeId: meta.storeId || null,
     libraryDir: meta.libraryDir || path.dirname(resolved),
     bannerPath: meta.bannerPath || null,
+    bannerUrl: meta.bannerUrl || null,
     settings: settingsFor(meta.settings)
   };
 }
@@ -117,7 +118,7 @@ function bannerFor(record) {
       return value;
     } catch {}
   }
-  return profile?.bannerUrl || null;
+  return record.bannerUrl || profile?.bannerUrl || null;
 }
 
 function existingNrSetup(exePath, chosen) {
@@ -194,6 +195,7 @@ async function discoverAndMerge() {
       existing.storeId = game.storeId || existing.storeId;
       existing.libraryDir = game.libraryDir || existing.libraryDir;
       existing.bannerPath = game.bannerPath || existing.bannerPath;
+      existing.bannerUrl = game.bannerUrl || existing.bannerUrl;
       continue;
     }
     state.games.push(candidate);
