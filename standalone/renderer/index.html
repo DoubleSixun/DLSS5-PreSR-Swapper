@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>DLSS Neural Rendering Manager</title>
+  <title>DLSS 5 Neural Rendering Manager</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="pass-styles.css" />
   <link rel="stylesheet" href="liquid-glass.css" />
@@ -12,9 +12,9 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="logo">N</div>
+        <div class="logo">5</div>
         <div>
-          <strong>DLSS NR</strong>
+          <strong>DLSS 5</strong>
           <small data-i18n="productSubtitle">Neural Rendering Manager</small>
         </div>
       </div>
@@ -28,7 +28,7 @@
 
     <main class="main">
       <header class="titlebar">
-        <div class="crumb" id="crumb">DLSS NR</div>
+        <div class="crumb" id="crumb">Home</div>
         <div class="window-controls">
           <button id="minBtn">—</button>
           <button id="maxBtn">□</button>
@@ -40,7 +40,7 @@
         <section class="page active" id="page-home">
           <section class="home-scan-card glass-card">
             <div class="home-scan-copy">
-              <span class="home-kicker">DLSS NR</span>
+              <span class="home-kicker">DLSS 5</span>
               <h1 data-i18n="homeTitle">Find compatible games</h1>
               <p data-i18n="homeBody">Scan your installed game libraries for native DLSS titles that can use Neural Rendering.</p>
               <div class="home-actions">
@@ -49,7 +49,6 @@
               </div>
               <span class="home-scan-status" id="homeScanStatus"></span>
             </div>
-            <div class="home-radar" aria-hidden="true"><span></span><i></i><b>N</b></div>
           </section>
 
           <section class="home-summary-grid">
@@ -201,5 +200,6 @@
   <div class="toast" id="toast"></div>
   <script src="app.js"></script>
   <script src="ux-fixes.js"></script>
+  <script src="home-compat.js"></script>
 </body>
 </html>
