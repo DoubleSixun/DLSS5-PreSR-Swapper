@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
-"""Patch pinned OptiScaler v0.7.7 with a compact DLSS 5 NR menu body.
+"""Patch pinned OptiScaler v0.7.7 into the manager's compact DLSS 5 overlay.
 
-Keep OptiScaler's original RenderMainMenuWindow, frame/input handling, GPU guard,
-font/scale lifecycle and ImGui host intact. Only replace the content table plus
-its graph/footer sections. This is deliberately narrower than the old patch,
-which replaced the whole main window and could desynchronise game input/menu
-state on some titles.
+Keep OptiScaler's menu visibility, input capture, frame lifecycle and renderer hooks intact.
+Only replace the visible NR controls/footer and narrowly restyle the existing host window.
 """
 
 from __future__ import annotations
@@ -16,6 +13,14 @@ import sys
 TABLE_SIGNATURE = "void MenuCommon::RenderMainMenuTable(RenderMenuContext& ctx)"
 GRAPHS_SIGNATURE = "void MenuCommon::RenderMainMenuGraphs(RenderMenuContext& ctx)"
 BOTTOM_SIGNATURE = "void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)"
+
+FLAGS_OLD = '''    ImGuiWindowFlags flags = 0;\n    flags |= ImGuiWindowFlags_NoSavedSettings;\n    flags |= ImGuiWindowFlags_NoCollapse;\n    flags |= ImGuiWindowFlags_AlwaysAutoResize;'''
+
+FLAGS_NEW = '''    ImGuiWindowFlags flags = 0;\n    flags |= ImGuiWindowFlags_NoSavedSettings;\n    flags |= ImGuiWindowFlags_NoCollapse;\n    flags |= ImGuiWindowFlags_AlwaysAutoResize;\n    flags |= ImGuiWindowFlags_NoTitleBar;\n    flags |= ImGuiWindowFlags_NoResize;\n    flags |= ImGuiWindowFlags_NoScrollbar;'''
+
+HOST_OLD = '''    if (ImGui::Begin(windowTitle.c_str(), NULL, flags))\n    {\n        // Header/status messages shown above the two-column settings table.\n        RenderMainMenuHeaderMessages(ctx);\n\n        // Main two-column settings content.\n        RenderMainMenuTable(ctx);\n\n        // Diagnostics and footer actions below the settings table.\n        RenderMainMenuGraphs(ctx);\n        RenderMainMenuBottomBar(ctx);\n\n        ImGui::End();\n    }'''
+
+HOST_NEW = '''    const float compactHostScale = std::clamp(menuResScale, 0.75f, 1.50f);\n    const float compactHostOpacity = std::clamp(config->FpsOverlayAlpha.value_or_default(), 0.50f, 0.95f);\n    const float compactMargin = 26.0f * compactHostScale;\n    ImVec2 compactAnchor(ctx.io.DisplaySize.x - compactMargin, compactMargin);\n    ImVec2 compactPivot(1.0f, 0.0f);\n    switch (config->FpsOverlayPosition.value_or_default())\n    {\n    case FpsOverlayPos_TopLeft:\n        compactAnchor = ImVec2(compactMargin, compactMargin);\n        compactPivot = ImVec2(0.0f, 0.0f);\n        break;\n    case FpsOverlayPos_BottomLeft:\n        compactAnchor = ImVec2(compactMargin, ctx.io.DisplaySize.y - compactMargin);\n        compactPivot = ImVec2(0.0f, 1.0f);\n        break;\n    case FpsOverlayPos_BottomRight:\n        compactAnchor = ImVec2(ctx.io.DisplaySize.x - compactMargin, ctx.io.DisplaySize.y - compactMargin);\n        compactPivot = ImVec2(1.0f, 1.0f);\n        break;\n    case FpsOverlayPos_TopRight:\n    default:\n        break;\n    }\n\n    ImGui::SetNextWindowPos(compactAnchor, ImGuiCond_Appearing, compactPivot);\n    ImGui::SetNextWindowSizeConstraints(ImVec2(390.0f * compactHostScale, 0.0f),\n                                        ImVec2(520.0f * compactHostScale, FLT_MAX));\n    ImGui::SetNextWindowBgAlpha(compactHostOpacity);\n    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 18.0f * compactHostScale);\n    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f, 16.0f) * compactHostScale);\n    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);\n    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.030f, 0.048f, 0.060f, 1.0f));\n    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.52f, 0.93f, 0.44f, 0.20f));\n\n    const bool compactHostVisible = ImGui::Begin("DLSS 5 Neural Rendering##DoubleSixunCompactHost", NULL, flags);\n    if (compactHostVisible)\n    {\n        // Keep the stock host lifecycle but omit OptiScaler's large status/header block.\n        RenderMainMenuTable(ctx);\n        RenderMainMenuGraphs(ctx);\n        RenderMainMenuBottomBar(ctx);\n    }\n    ImGui::End();\n\n    ImGui::PopStyleColor(2);\n    ImGui::PopStyleVar(3);'''
 
 TABLE_REPLACEMENT = r'''void MenuCommon::RenderMainMenuTable(RenderMenuContext& ctx)
 {
@@ -57,10 +62,13 @@ TABLE_REPLACEMENT = r'''void MenuCommon::RenderMainMenuTable(RenderMenuContext& 
     }
 
     int passes = (int) std::clamp(config->DlssNrPasses.value_or_default(), 1u, 3u);
+    int passIndex = passes - 1;
+    const char* passChoices[] = { "1", "2", "3" };
     ImGui::SetNextItemWidth(170.0f * scale);
-    if (ImGui::Combo("Passes", &passes, "1\0\2\0\3\0\0"))
+    if (ImGui::Combo("Passes", &passIndex, passChoices, IM_ARRAYSIZE(passChoices)))
     {
-        config->DlssNrPasses = (uint32_t) std::clamp(passes, 1, 3);
+        passes = std::clamp(passIndex + 1, 1, 3);
+        config->DlssNrPasses = (uint32_t) passes;
         changed = true;
     }
 
@@ -108,8 +116,6 @@ TABLE_REPLACEMENT = r'''void MenuCommon::RenderMainMenuTable(RenderMenuContext& 
 
 GRAPHS_REPLACEMENT = r'''void MenuCommon::RenderMainMenuGraphs(RenderMenuContext& ctx)
 {
-    // Compact manager overlay intentionally omits diagnostic plots. Keeping this
-    // as a narrow section patch preserves the upstream main-window lifecycle.
     (void) ctx;
 }
 '''
@@ -129,8 +135,6 @@ BOTTOM_REPLACEMENT = r'''void MenuCommon::RenderMainMenuBottomBar(RenderMenuCont
     ImGui::SameLine(0.0f, 8.0f);
     if (ImGui::Button("Close"))
     {
-        // Preserve OptiScaler's original close/input cleanup verbatim. The game
-        // must regain keyboard/mouse ownership through the same path as stock.
         _isVisible = false;
         hasGamepad = (io.BackendFlags | ImGuiBackendFlags_HasGamepad) > 0;
         io.BackendFlags &= 30;
@@ -140,45 +144,6 @@ BOTTOM_REPLACEMENT = r'''void MenuCommon::RenderMainMenuBottomBar(RenderMenuCont
         io.MouseDrawCursor = false;
         io.WantCaptureKeyboard = false;
         io.WantCaptureMouse = false;
-    }
-
-    // Use the manager's position preference only for the initial placement. Once
-    // the user drags the menu, preserve the manually chosen position for the rest
-    // of the session, matching upstream behavior.
-    const auto winSize = ImGui::GetWindowSize();
-    const auto winPos = ImGui::GetWindowPos();
-    if (lastPosition.x < -900.0f ||
-        (lastPosition.x >= winPos.x - 1.0f && lastPosition.y >= winPos.y - 1.0f &&
-         lastPosition.x <= winPos.x + 1.0f && lastPosition.y <= winPos.y + 1.0f))
-    {
-        const float margin = 26.0f * std::clamp(ctx.menuResScale, 0.75f, 1.50f);
-        float posX = std::max(margin, (io.DisplaySize.x - winSize.x) * 0.5f);
-        float posY = std::max(margin, (io.DisplaySize.y - winSize.y) * 0.5f);
-
-        switch (config->FpsOverlayPosition.value_or_default())
-        {
-        case FpsOverlayPos_TopLeft:
-            posX = margin;
-            posY = margin;
-            break;
-        case FpsOverlayPos_TopRight:
-            posX = std::max(margin, io.DisplaySize.x - winSize.x - margin);
-            posY = margin;
-            break;
-        case FpsOverlayPos_BottomLeft:
-            posX = margin;
-            posY = std::max(margin, io.DisplaySize.y - winSize.y - margin);
-            break;
-        case FpsOverlayPos_BottomRight:
-            posX = std::max(margin, io.DisplaySize.x - winSize.x - margin);
-            posY = std::max(margin, io.DisplaySize.y - winSize.y - margin);
-            break;
-        default:
-            break;
-        }
-
-        ImGui::SetWindowPos(ImVec2 { posX, posY });
-        lastPosition = ImVec2 { posX, posY };
     }
 }
 '''
@@ -240,6 +205,12 @@ def replace_function(text: str, signature: str, replacement: str) -> str:
     return text[:start] + replacement + text[end:]
 
 
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    if old not in text:
+        raise RuntimeError(f"pinned {label} block not found")
+    return text.replace(old, new, 1)
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: patch-optiscaler-compact-overlay.py <OptiScaler checkout>", file=sys.stderr)
@@ -252,13 +223,16 @@ def main() -> int:
         print("compact overlay patch already present")
         return 0
 
-    # Do not patch RenderMainMenuWindow: it owns the stable upstream ImGui/input
-    # lifecycle. Only swap the visible content sections inside that host.
+    # Preserve RenderMainMenuWindow's execution/input lifecycle. Only restyle the
+    # existing host at two narrow call sites and replace its visible content helpers.
     text = replace_function(text, TABLE_SIGNATURE, TABLE_REPLACEMENT)
     text = replace_function(text, GRAPHS_SIGNATURE, GRAPHS_REPLACEMENT)
     text = replace_function(text, BOTTOM_SIGNATURE, BOTTOM_REPLACEMENT)
+    text = replace_once(text, FLAGS_OLD, FLAGS_NEW, "main-menu flags")
+    text = replace_once(text, HOST_OLD, HOST_NEW, "main-menu host")
+
     target.write_text(text, encoding="utf-8")
-    print(f"patched compact content while preserving upstream menu host: {target}")
+    print(f"patched compact DLSS 5 overlay while preserving OptiScaler lifecycle: {target}")
     return 0
 
 
