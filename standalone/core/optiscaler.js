@@ -10,7 +10,7 @@ const fileState = require('./file-state');
 
 const RELEASE = Object.freeze({
   version: '0.7.7',
-  packageId: '0.7.7-presr',
+  packageId: '0.7.7-dlss5mgr1',
   url: 'https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass/releases/download/v0.7.7/OptiScaler-DLSSNR-v0.7.7.zip',
   sha256: '4a315a3b3ee495631bd7cb1f562f609af577443602e507bfc7a7e6749c296258',
   readme: 'INSTALL-DLSSNR.md',
@@ -48,8 +48,25 @@ function validatePackage(root) {
   return true;
 }
 
+function bundledPackageRoot() {
+  const root = path.join(__dirname, '..', 'backend-payload');
+  try {
+    if (fs.existsSync(path.join(root, 'OptiScaler.dll'))) {
+      validatePackage(root);
+      return root;
+    }
+  } catch {}
+  return null;
+}
+
 async function ensurePackage(cacheRoot) {
-  const base = path.join(path.resolve(cacheRoot), 'components', `OptiScaler-${RELEASE.packageId}`);
+  const bundled = bundledPackageRoot();
+  if (bundled) return bundled;
+
+  // Developer/source checkouts can still run without building the custom backend first.
+  // Those checkouts fall back to the pinned upstream package; release/CI builds bundle the
+  // patched compact-overlay backend and therefore never hit this branch during normal use.
+  const base = path.join(path.resolve(cacheRoot), 'components', 'OptiScaler-0.7.7-presr');
   const archive = base + '.zip';
   if (!download.cached(archive, RELEASE.sha256)) await download.fetchVerified(RELEASE.url, RELEASE.sha256, archive);
   await fs.promises.rm(base, { recursive: true, force: true });
@@ -85,6 +102,14 @@ function configure(text, target, settings = {}) {
     ['DlssNr', 'Style', styleValue(settings, 'pass1Style')],
     ['DlssNr', 'Pass2Style', styleValue(settings, 'pass2Style')],
     ['DlssNr', 'Pass3Style', styleValue(settings, 'pass3Style')],
+    // Standalone defaults for the compact DLSS 5 in-game overlay. Global preferences
+    // are applied immediately afterwards by nr-settings.js, so customized values win.
+    ['Menu', 'ShortcutKey', '45'],
+    ['Menu', 'Scale', '1.00'],
+    ['Menu', 'FpsOverlayAlpha', '0.82'],
+    ['Menu', 'FpsOverlayPos', '1'],
+    ['Menu', 'DisableSplash', 'true'],
+    ['Menu', 'OverlayMenu', 'true'],
     ['Log', 'LogToFile', 'true'],
     ['Log', 'LogLevel', '2'],
     ['Spoofing', 'Dxgi', 'false'],
@@ -181,6 +206,7 @@ module.exports = {
   LICENSES,
   hookFor,
   validatePackage,
+  bundledPackageRoot,
   ensurePackage,
   configure,
   copyPlan,
