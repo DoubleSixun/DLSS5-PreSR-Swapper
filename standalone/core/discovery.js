@@ -7,14 +7,43 @@ const gameScan = require('./game-scan');
 
 const NOT_A_GAME_EXE = /^(unins|setup|install|vcredist|vc_redist|dxsetup|dxwebsetup|oalinst|uninstall|crashreport|crashhandler|easyanticheat|eac|battleye|be_service|launcher|activation|patch|update|dotnetfx|touchup|helper|service|cleanup|benchmark)/i;
 
+function firstExisting(files) {
+  return files.find(file => {
+    try { return fs.statSync(file).isFile(); } catch { return false; }
+  }) || null;
+}
+
 function steamBanner(entry) {
   if (entry.launcher !== 'Steam' || !entry.steamRoot || !entry.id) return null;
   const root = path.join(entry.steamRoot, 'appcache', 'librarycache');
-  const candidates = [
-    path.join(root, String(entry.id), 'header.jpg'),
-    path.join(root, `${entry.id}_header.jpg`)
-  ];
-  return candidates.find(file => fs.existsSync(file)) || null;
+  const appDir = path.join(root, String(entry.id));
+  const preferredNames = ['library_hero.jpg', 'library_header.jpg', 'header.jpg', 'library_capsule.jpg', 'library_hero_blur.jpg'];
+
+  // Steam currently keeps artwork in several layouts at the same time. Prefer
+  // a wide hero/header, but support the newer appid/content-hash directories
+  // as well as the older flat cache names.
+  const direct = firstExisting(preferredNames.map(name => path.join(appDir, name)));
+  if (direct) return direct;
+
+  try {
+    for (const entryDir of fs.readdirSync(appDir, { withFileTypes: true })) {
+      if (!entryDir.isDirectory()) continue;
+      const nested = firstExisting(preferredNames.map(name => path.join(appDir, entryDir.name, name)));
+      if (nested) return nested;
+    }
+  } catch {}
+
+  return firstExisting([
+    path.join(root, `${entry.id}_library_hero.jpg`),
+    path.join(root, `${entry.id}_header.jpg`),
+    path.join(root, `${entry.id}_library_header.jpg`),
+    path.join(root, `${entry.id}_library_capsule.jpg`)
+  ]);
+}
+
+function steamBannerUrl(entry) {
+  if (entry.launcher !== 'Steam' || !entry.id) return null;
+  return `https://cdn.cloudflare.steamstatic.com/steam/apps/${encodeURIComponent(String(entry.id))}/header.jpg`;
 }
 
 function pathDistance(a, b) {
@@ -64,7 +93,8 @@ async function inspectEntry(entry) {
     launcher: entry.launcher || 'Detected',
     storeId: entry.id || null,
     libraryDir: entry.dir,
-    bannerPath: steamBanner(entry) || (entry.poster && entry.poster.tall === false ? entry.poster.file : null)
+    bannerPath: steamBanner(entry) || (entry.poster && entry.poster.tall === false ? entry.poster.file : null),
+    bannerUrl: steamBannerUrl(entry)
   };
 }
 
@@ -86,4 +116,4 @@ async function discoverGames() {
   });
 }
 
-module.exports = { discoverGames, candidateFor, inspectEntry, steamBanner, pathDistance };
+module.exports = { discoverGames, candidateFor, inspectEntry, steamBanner, steamBannerUrl, pathDistance };
