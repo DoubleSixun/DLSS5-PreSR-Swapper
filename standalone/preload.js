@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('nrApp', Object.freeze({
   addGame: () => ipcRenderer.invoke('games:add'),
   selectGame: id => ipcRenderer.invoke('games:select', id),
   removeGame: id => ipcRenderer.invoke('games:remove', id),
+  launchGame: id => ipcRenderer.invoke('game:launch', id),
   openGameFolder: id => ipcRenderer.invoke('game:open-folder', id),
   setGameSettings: (id, settings) => ipcRenderer.invoke('game:set-settings', id, settings),
   importRuntime: id => ipcRenderer.invoke('runtime:import', id),

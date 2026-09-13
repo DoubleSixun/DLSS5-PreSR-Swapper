@@ -20,7 +20,8 @@ const PROFILE_BY_EXE = Object.freeze({
     apiLabel: 'DirectX 12',
     bitness: 64,
     onlineRisk: true,
-    bannerUrl: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3564740/header.jpg'
+    bannerUrl: 'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/3564740/library_hero.jpg',
+    coverUrl: 'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/3564740/library_600x900.jpg'
   })
 });
 
@@ -38,7 +39,7 @@ let win = null;
 let liveState = null;
 let discoveryPromise = null;
 const iconCache = new Map();
-const bannerCache = new Map();
+const artworkCache = new Map();
 
 const stateFile = () => path.join(app.getPath('userData'), 'standalone-library.json');
 const idFor = exePath => crypto.createHash('sha1').update(path.resolve(exePath).toLowerCase()).digest('hex').slice(0, 16);
@@ -87,6 +88,8 @@ function normalizeRecord(exePath, meta = {}) {
     libraryDir: meta.libraryDir || path.dirname(resolved),
     bannerPath: meta.bannerPath || null,
     bannerUrl: meta.bannerUrl || null,
+    coverPath: meta.coverPath || null,
+    coverUrl: meta.coverUrl || null,
     settings: settingsFor(meta.settings)
   };
 }
@@ -105,20 +108,30 @@ async function iconFor(exePath) {
   }
 }
 
+function localArtwork(file) {
+  if (!file || !fs.existsSync(file)) return null;
+  const key = path.resolve(file).toLowerCase();
+  if (artworkCache.has(key)) return artworkCache.get(key);
+  try {
+    const ext = path.extname(file).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+    const value = `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
+    artworkCache.set(key, value);
+    return value;
+  } catch {
+    artworkCache.set(key, null);
+    return null;
+  }
+}
+
 function bannerFor(record) {
   const profile = profileFor(record.exePath);
-  if (record.bannerPath && fs.existsSync(record.bannerPath)) {
-    const key = path.resolve(record.bannerPath).toLowerCase();
-    if (bannerCache.has(key)) return bannerCache.get(key);
-    try {
-      const ext = path.extname(record.bannerPath).toLowerCase();
-      const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
-      const value = `data:${mime};base64,${fs.readFileSync(record.bannerPath).toString('base64')}`;
-      bannerCache.set(key, value);
-      return value;
-    } catch {}
-  }
-  return record.bannerUrl || profile?.bannerUrl || null;
+  return localArtwork(record.bannerPath) || record.bannerUrl || profile?.bannerUrl || null;
+}
+
+function coverFor(record) {
+  const profile = profileFor(record.exePath);
+  return localArtwork(record.coverPath) || record.coverUrl || profile?.coverUrl || null;
 }
 
 function existingNrSetup(exePath, chosen) {
@@ -132,6 +145,7 @@ function existingNrSetup(exePath, chosen) {
 async function inspectRecord(record) {
   const profile = profileFor(record.exePath);
   const result = await gameScan.inspect(record.exePath, profile);
+  const compatible = Boolean(result.chosen && result.chosen.bitness === 64 && result.chosen.api && result.dlss);
   return {
     id: record.id,
     dir: record.dir,
@@ -144,13 +158,15 @@ async function inspectRecord(record) {
     onlineRisk: Boolean(profile?.onlineRisk),
     chosen: result.chosen,
     dlss: result.dlss,
+    compatible,
     installed: Boolean(result.installed),
     existingSetup: existingNrSetup(record.exePath, result.chosen) && !result.hasBackup,
     hasBackup: Boolean(result.hasBackup),
     optiscaler: result.optiscaler,
     runtime: runtime.detect(app, record.exePath),
     iconDataUrl: await iconFor(record.exePath),
-    bannerDataUrl: bannerFor(record)
+    bannerDataUrl: bannerFor(record),
+    coverDataUrl: coverFor(record)
   };
 }
 
@@ -166,12 +182,14 @@ async function viewState() {
         scanError: error.message || String(error),
         chosen: null,
         dlss: null,
+        compatible: false,
         installed: false,
         existingSetup: false,
         hasBackup: fileState.hasBackup(record.dir),
         runtime: runtime.detect(app, record.exePath),
         iconDataUrl: await iconFor(record.exePath),
-        bannerDataUrl: bannerFor(record)
+        bannerDataUrl: bannerFor(record),
+        coverDataUrl: coverFor(record)
       });
     }
   }
@@ -196,6 +214,8 @@ async function discoverAndMerge() {
       existing.libraryDir = game.libraryDir || existing.libraryDir;
       existing.bannerPath = game.bannerPath || existing.bannerPath;
       existing.bannerUrl = game.bannerUrl || existing.bannerUrl;
+      existing.coverPath = game.coverPath || existing.coverPath;
+      existing.coverUrl = game.coverUrl || existing.coverUrl;
       continue;
     }
     state.games.push(candidate);
@@ -232,6 +252,25 @@ async function confirmOnlineRisk(record) {
       : 'This game includes online functionality. Injection-based graphics mods can crash or trigger anti-cheat risk. This app does not bypass or disable anti-cheat.',
     detail: zh ? '仅在你理解风险并愿意继续时安装。' : 'Install only if you understand the risk and want to continue.',
     buttons: zh ? ['取消', '继续'] : ['Cancel', 'Continue'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
+  return result.response === 1;
+}
+
+async function confirmExistingMigration() {
+  const zh = loadState().language === 'zh-CN';
+  const result = await dialog.showMessageBox(win, {
+    type: 'warning',
+    title: zh ? '检测到现有 OptiScaler 安装' : 'Existing OptiScaler setup detected',
+    message: zh
+      ? '可以把现有安装迁移到本应用的 DLSS 5 后端。将被替换的文件会先备份，可通过“恢复原文件”还原。'
+      : 'The existing setup can be migrated to this app’s DLSS 5 backend. Files that are replaced will be backed up first and can be restored with Restore original.',
+    detail: zh
+      ? '这不会绕过或关闭任何反作弊功能。请先退出游戏再继续。'
+      : 'This does not bypass or disable anti-cheat. Close the game before continuing.',
+    buttons: zh ? ['取消', '迁移并安装'] : ['Cancel', 'Migrate and install'],
     defaultId: 0,
     cancelId: 0,
     noLink: true
@@ -309,6 +348,17 @@ ipcMain.handle('game:open-folder', (_event, id) => safeResult(async () => {
   await shell.openPath(path.dirname(record.exePath));
   return true;
 }));
+ipcMain.handle('game:launch', (_event, id) => safeResult(async () => {
+  const record = recordFor(id);
+  if (!record) throw new Error('Unknown game');
+  if (record.launcher === 'Steam' && record.storeId) {
+    await shell.openExternal(`steam://rungameid/${encodeURIComponent(String(record.storeId))}`);
+    return true;
+  }
+  const result = await shell.openPath(record.exePath);
+  if (result) throw new Error(result);
+  return true;
+}));
 ipcMain.handle('game:set-settings', (_event, id, settings) => safeResult(async () => {
   const record = recordFor(id);
   if (!record) throw new Error('Unknown game');
@@ -346,8 +396,14 @@ ipcMain.handle('game:install', (_event, id) => safeResult(async () => {
   if (inspected.chosen.bitness !== 64) throw Object.assign(new Error('This Neural Rendering route requires a 64-bit game.'), { code: 'unsupportedArchitecture' });
   if (!inspected.chosen.api) throw Object.assign(new Error('The rendering API could not be detected.'), { code: 'noRenderingApi' });
   if (!inspected.dlss) throw Object.assign(new Error('Native DLSS was not detected for this game.'), { code: 'noDlss' });
-  if (inspected.existingSetup) throw Object.assign(new Error('An existing OptiScaler Neural Rendering setup was detected. Its settings can be managed here, but it will not be overwritten by this installer.'), { code: 'existingSetup' });
   if (inspected.hasBackup) throw Object.assign(new Error('This game already has a managed installation. Restore originals before reinstalling.'), { code: 'alreadyInstalled' });
+
+  let replaceExisting = false;
+  if (inspected.existingSetup) {
+    replaceExisting = await confirmExistingMigration();
+    if (!replaceExisting) return { cancelled: true, state: await viewState() };
+  }
+
   const runtimePath = await runtime.resolve(app, dialog, record.exePath, loadState().language);
   const packageRoot = await optiscaler.ensurePackage(app.getPath('userData'));
   const logs = [];
@@ -358,10 +414,12 @@ ipcMain.handle('game:install', (_event, id) => safeResult(async () => {
     apiLabel: inspected.chosen.apiLabel,
     packageRoot,
     runtimePath,
-    settings: settingsFor(record.settings)
+    settings: settingsFor(record.settings),
+    replaceExisting
   }, entry => logs.push(entry));
   nrSettings.apply(record.exePath, settingsFor(record.settings));
-  return { logs, state: await viewState() };
+  nrSettings.applyOverlay(record.exePath, nrSettings.readOverlayPrefs(app.getPath('userData')));
+  return { logs, migrated: replaceExisting, state: await viewState() };
 }));
 ipcMain.handle('game:restore', (_event, id) => safeResult(async () => {
   const record = recordFor(id);

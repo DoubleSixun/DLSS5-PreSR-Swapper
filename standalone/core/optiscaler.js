@@ -63,9 +63,6 @@ async function ensurePackage(cacheRoot) {
   const bundled = bundledPackageRoot();
   if (bundled) return bundled;
 
-  // Developer/source checkouts can still run without building the custom backend first.
-  // Those checkouts fall back to the pinned upstream package; release/CI builds bundle the
-  // patched compact-overlay backend and therefore never hit this branch during normal use.
   const base = path.join(path.resolve(cacheRoot), 'components', 'OptiScaler-0.7.7-presr');
   const archive = base + '.zip';
   if (!download.cached(archive, RELEASE.sha256)) await download.fetchVerified(RELEASE.url, RELEASE.sha256, archive);
@@ -92,18 +89,14 @@ function configure(text, target, settings = {}) {
   const runBeforeSR = settings.runBeforeSR !== false;
   let out = String(text || '');
   const values = [
-    ['DlssNr', 'Enabled', 'true'],
+    ['DlssNr', 'Enabled', settings.enabled === false ? 'false' : 'true'],
     ['DlssNr', 'RunBeforeSR', runBeforeSR ? 'true' : 'false'],
     ['DlssNr', 'FinishedPicture', 'false'],
     ['DlssNr', 'Passes', String(passes)],
     ['DlssNr', 'WorkingScale', '1.0'],
-    // wilsjo2's multipass backend uses 0=Standard, 1=Natural, 2=Cinematic.
-    // Later-pass `auto` values inherit pass 1, as documented by the backend.
     ['DlssNr', 'Style', styleValue(settings, 'pass1Style')],
     ['DlssNr', 'Pass2Style', styleValue(settings, 'pass2Style')],
     ['DlssNr', 'Pass3Style', styleValue(settings, 'pass3Style')],
-    // Standalone defaults for the compact DLSS 5 in-game overlay. Global preferences
-    // are applied immediately afterwards by nr-settings.js, so customized values win.
     ['Menu', 'ShortcutKey', '45'],
     ['Menu', 'Scale', '1.00'],
     ['Menu', 'FpsOverlayAlpha', '0.82'],
@@ -130,14 +123,18 @@ function configure(text, target, settings = {}) {
 }
 
 function copyPlan(root, api) {
-  return [
+  const plan = [
     ['OptiScaler.dll', hookFor(api)],
     ['nvngx.dll_dlssnr.dll', 'nvngx.dll_dlssnr.dll'],
     ...LIBRARIES.map(file => [`OptiScaler/${file}`, `OptiScaler/${file}`]),
     ...LICENSES.map(file => [`Licenses/${file}`, `OptiScaler/licenses/${file}`]),
     ['OptiScaler-GPL-3.0.txt', 'OptiScaler/licenses/LICENSE.GPL-3.0.txt'],
     [RELEASE.readme, 'OptiScaler/README-DLSSNR.txt']
-  ].map(([from, to]) => ({ from: fileState.safePath(root, from), to }));
+  ];
+  if (fs.existsSync(path.join(root, 'DLSS5-MANAGER-BACKEND.txt'))) {
+    plan.push(['DLSS5-MANAGER-BACKEND.txt', 'OptiScaler/DLSS5-MANAGER-BACKEND.txt']);
+  }
+  return plan.map(([from, to]) => ({ from: fileState.safePath(root, from), to }));
 }
 
 function checkConflicts(gameDir, exePath, api) {
@@ -153,14 +150,14 @@ function checkConflicts(gameDir, exePath, api) {
   if (fs.existsSync(optiDir)) throw fail('installConflict', `Conflicting pre-existing OptiScaler folder: ${optiDir}`);
 }
 
-async function install({ gameDir, exePath, api, apiLabel, packageRoot, runtimePath, settings }, onLog) {
+async function install({ gameDir, exePath, api, apiLabel, packageRoot, runtimePath, settings, replaceExisting = false }, onLog) {
   const log = (code, params = {}) => onLog && onLog({ code, params });
   validatePackage(packageRoot);
   if (!runtimePath || !fs.existsSync(runtimePath)) throw fail('runtimeRequired', 'Neural Rendering runtime is missing.');
-  checkConflicts(gameDir, exePath, api);
+  if (!replaceExisting) checkConflicts(gameDir, exePath, api);
 
   const manifest = fileState.beginManifest(gameDir, exePath, api);
-  manifest.optiscaler = { version: RELEASE.packageId, upstreamVersion: RELEASE.version, hook: hookFor(api) };
+  manifest.optiscaler = { version: RELEASE.packageId, upstreamVersion: RELEASE.version, hook: hookFor(api), migratedExisting: Boolean(replaceExisting) };
   manifest.game.bitness = 64;
   manifest.game.apiLabel = apiLabel || api;
   await fileState.saveManifest(gameDir, manifest);
@@ -184,7 +181,7 @@ async function install({ gameDir, exePath, api, apiLabel, packageRoot, runtimePa
     const baseText = ini.read(configFile) || ini.read(path.join(packageRoot, 'OptiScaler.ini'));
     await fileState.writeTracked(manifest, gameDir, configFile, configure(baseText, { exePath }, settings), { kind: 'config' });
     await fileState.saveManifest(gameDir, manifest);
-    log('installDone', { version: RELEASE.packageId });
+    log(replaceExisting ? 'migrationDone' : 'installDone', { version: RELEASE.packageId });
     return manifest;
   } catch (error) {
     try { await fileState.saveManifest(gameDir, manifest); } catch {}
