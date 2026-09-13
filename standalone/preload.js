@@ -21,3 +21,9 @@ contextBridge.exposeInMainWorld('nrApp', Object.freeze({
   maximize: () => ipcRenderer.send('window:maximize'),
   close: () => ipcRenderer.send('window:close')
 }));
+
+window.addEventListener('DOMContentLoaded', () => {
+  const script = document.createElement('script');
+  script.src = 'r79-hotfix.js';
+  document.body.appendChild(script);
+});
