@@ -54,7 +54,7 @@ test('standalone exposes list icons, banner artwork and existing NR detection to
   assert.match(ux, /Existing NR detected/);
 });
 
-test('home UI keeps explanations compact and moves How it works behind an info button', () => {
+test('game detail keeps explanations compact and moves How it works behind an info button', () => {
   const ux = read('standalone/renderer/ux-fixes.js');
   const css = read('standalone/renderer/compact-ui.css');
   assert.match(ux, /nrInfoButton/);
@@ -65,22 +65,44 @@ test('home UI keeps explanations compact and moves How it works behind an info b
   assert.match(css, /\.badges\{display:inline-flex/);
 });
 
+test('Home is a scan dashboard while Games opens a dedicated game detail page', () => {
+  const index = read('standalone/renderer/index.html');
+  const app = read('standalone/renderer/app.js');
+  assert.match(index, /id="homeScanBtn"/);
+  assert.match(index, /id="homeGameCount"/);
+  assert.match(index, /id="page-game"/);
+  assert.match(index, /id="gameBackBtn"/);
+  assert.match(app, /function renderHome\(\)/);
+  assert.match(app, /function renderGame\(\)/);
+  assert.match(app, /showPage\('game'\)/);
+  assert.match(app, /currentPage === 'game' \? 'games'/);
+});
+
 test('standalone automatically discovers launcher games and also exposes a manual rescan', () => {
   const main = read('standalone/main.js');
   const preload = read('standalone/preload.js');
+  const app = read('standalone/renderer/app.js');
   const discovery = read('standalone/core/discovery.js');
   const library = read('standalone/core/derived/library.js');
-  const ux = read('standalone/renderer/ux-fixes.js');
   assert.match(main, /ensureAutoDiscovery/);
   assert.match(main, /games:rescan/);
   assert.match(preload, /rescanGames/);
+  assert.match(app, /function scanGames\(\)/);
+  assert.match(app, /window\.nrApp\.rescanGames/);
   assert.match(discovery, /library\.discover/);
   assert.match(library, /Steam/);
   assert.match(library, /Epic Games/);
   assert.match(library, /GOG/);
   assert.match(library, /Ubisoft/);
   assert.match(library, /Xbox/);
-  assert.match(ux, /rescanGames/);
+});
+
+test('Steam banner discovery supports current nested cache layouts and wide hero art', () => {
+  const discovery = read('standalone/core/discovery.js');
+  assert.match(discovery, /library_hero\.jpg/);
+  assert.match(discovery, /library_header\.jpg/);
+  assert.match(discovery, /readdirSync\(appDir/);
+  assert.match(discovery, /content-hash directories/);
 });
 
 test('non-blocking setting updates no longer pre-render switches back to old state', () => {
