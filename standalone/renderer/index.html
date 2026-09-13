@@ -24,10 +24,6 @@
         <button class="nav-item" data-page="games"><span>▦</span><b data-i18n="games">Games</b></button>
         <button class="nav-item" data-page="settings"><span>⚙</span><b data-i18n="settings">Settings</b></button>
       </nav>
-
-      <div class="sidebar-foot">
-        <div class="status-pill"><i></i><span data-i18n="standaloneCore">Standalone core</span></div>
-      </div>
     </aside>
 
     <main class="main">
@@ -42,17 +38,57 @@
 
       <div class="content">
         <section class="page active" id="page-home">
-          <div id="emptyState" class="empty-state hidden">
-            <div class="empty-icon">+</div>
-            <h1 data-i18n="addFirstGameTitle">Add your first game</h1>
-            <p data-i18n="addFirstGameBody">Choose the game's main executable. The app will detect DLSS and the rendering API.</p>
-            <button class="primary" id="emptyAddBtn" data-i18n="addGame">Add game</button>
+          <section class="home-scan-card glass-card">
+            <div class="home-scan-copy">
+              <span class="home-kicker">DLSS NR</span>
+              <h1 data-i18n="homeTitle">Find compatible games</h1>
+              <p data-i18n="homeBody">Scan your installed game libraries for native DLSS titles that can use Neural Rendering.</p>
+              <div class="home-actions">
+                <button class="primary" id="homeScanBtn" data-i18n="scanGames">Scan games</button>
+                <button class="ghost" id="homeAddBtn" data-i18n="addGame">Add game</button>
+              </div>
+              <span class="home-scan-status" id="homeScanStatus"></span>
+            </div>
+            <div class="home-radar" aria-hidden="true"><span></span><i></i><b>N</b></div>
+          </section>
+
+          <section class="home-summary-grid">
+            <div class="home-summary-card">
+              <span data-i18n="compatibleGames">Compatible games</span>
+              <strong id="homeGameCount">0</strong>
+            </div>
+            <div class="home-summary-card">
+              <span data-i18n="installedGames">Neural Rendering installed</span>
+              <strong id="homeInstalledCount">0</strong>
+            </div>
+            <button class="home-summary-card home-open-games" id="homeOpenGamesBtn">
+              <span data-i18n="openLibrary">Open game library</span>
+              <strong>→</strong>
+            </button>
+          </section>
+        </section>
+
+        <section class="page" id="page-games">
+          <div class="page-heading">
+            <div><h1 data-i18n="games">Games</h1><p data-i18n="gamesBody">Games managed by this app.</p></div>
+            <button class="primary compact" id="addGameBtn" data-i18n="addGame">Add game</button>
+          </div>
+          <div class="game-list" id="gameList"></div>
+        </section>
+
+        <section class="page" id="page-game">
+          <div class="game-page-toolbar">
+            <button class="ghost compact" id="gameBackBtn"><span>←</span> <span data-i18n="games">Games</span></button>
+          </div>
+
+          <div id="gameEmptyState" class="empty-state hidden">
+            <div class="empty-icon">▦</div>
+            <h1 data-i18n="noGames">No games yet.</h1>
           </div>
 
           <div id="gameDetail" class="hidden">
             <section class="hero">
               <div class="hero-copy">
-                <div class="eyebrow" data-i18n="gameDetected">Game detected</div>
                 <h1 id="gameTitle">Game</h1>
                 <div class="badges" id="badges"></div>
               </div>
@@ -114,39 +150,15 @@
                 <div class="pass-style-grid">
                   <div class="pass-card" data-pass-card="1">
                     <div class="pass-card-head"><b data-i18n="pass1">Pass 1</b><small id="pass1State"></small></div>
-                    <label class="field compact-field">
-                      <span data-i18n="style">Style</span>
-                      <select id="pass1Style">
-                        <option value="auto" data-i18n="backendDefault">Default</option>
-                        <option value="0" data-i18n="standard">Standard</option>
-                        <option value="1" data-i18n="natural">Natural</option>
-                        <option value="2" data-i18n="cinematic">Cinematic</option>
-                      </select>
-                    </label>
+                    <label class="field compact-field"><span data-i18n="style">Style</span><select id="pass1Style"><option value="auto" data-i18n="backendDefault">Default</option><option value="0" data-i18n="standard">Standard</option><option value="1" data-i18n="natural">Natural</option><option value="2" data-i18n="cinematic">Cinematic</option></select></label>
                   </div>
                   <div class="pass-card" data-pass-card="2">
                     <div class="pass-card-head"><b data-i18n="pass2">Pass 2</b><small id="pass2State"></small></div>
-                    <label class="field compact-field">
-                      <span data-i18n="style">Style</span>
-                      <select id="pass2Style">
-                        <option value="auto" data-i18n="inheritPass1">Inherit Pass 1</option>
-                        <option value="0" data-i18n="standard">Standard</option>
-                        <option value="1" data-i18n="natural">Natural</option>
-                        <option value="2" data-i18n="cinematic">Cinematic</option>
-                      </select>
-                    </label>
+                    <label class="field compact-field"><span data-i18n="style">Style</span><select id="pass2Style"><option value="auto" data-i18n="inheritPass1">Inherit Pass 1</option><option value="0" data-i18n="standard">Standard</option><option value="1" data-i18n="natural">Natural</option><option value="2" data-i18n="cinematic">Cinematic</option></select></label>
                   </div>
                   <div class="pass-card" data-pass-card="3">
                     <div class="pass-card-head"><b data-i18n="pass3">Pass 3</b><small id="pass3State"></small></div>
-                    <label class="field compact-field">
-                      <span data-i18n="style">Style</span>
-                      <select id="pass3Style">
-                        <option value="auto" data-i18n="inheritPass1">Inherit Pass 1</option>
-                        <option value="0" data-i18n="standard">Standard</option>
-                        <option value="1" data-i18n="natural">Natural</option>
-                        <option value="2" data-i18n="cinematic">Cinematic</option>
-                      </select>
-                    </label>
+                    <label class="field compact-field"><span data-i18n="style">Style</span><select id="pass3Style"><option value="auto" data-i18n="inheritPass1">Inherit Pass 1</option><option value="0" data-i18n="standard">Standard</option><option value="1" data-i18n="natural">Natural</option><option value="2" data-i18n="cinematic">Cinematic</option></select></label>
                   </div>
                 </div>
                 <p class="pass-help" data-i18n="passStylesHelp">Later passes can use their own style. Inherit keeps them linked to Pass 1.</p>
@@ -164,20 +176,7 @@
                 <div class="tech-grid" id="techGrid"></div>
               </details>
             </section>
-
-            <div class="game-hint">
-              <span>●</span>
-              <div><b data-i18n="inGame">In game:</b> <span data-i18n="keepDlssOn">keep DLSS Super Resolution enabled. Quality / Balanced / Performance remains a game setting.</span></div>
-            </div>
           </div>
-        </section>
-
-        <section class="page" id="page-games">
-          <div class="page-heading">
-            <div><h1 data-i18n="games">Games</h1><p data-i18n="gamesBody">Games managed by this app.</p></div>
-            <button class="primary compact" id="addGameBtn" data-i18n="addGame">Add game</button>
-          </div>
-          <div class="game-list" id="gameList"></div>
         </section>
 
         <section class="page" id="page-settings">
@@ -187,10 +186,7 @@
           <section class="glass-card settings-page-card">
             <label class="field language-field">
               <span data-i18n="language">Language</span>
-              <select id="languageSelect">
-                <option value="en">English</option>
-                <option value="zh-CN">简体中文</option>
-              </select>
+              <select id="languageSelect"><option value="en">English</option><option value="zh-CN">简体中文</option></select>
             </label>
             <div class="about-copy">
               <strong data-i18n="creditsTitle">Credits</strong>
