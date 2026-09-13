@@ -62,8 +62,6 @@
     detectedButton: '现有安装',
     info: '工作原理',
     rescan: '扫描游戏',
-    scanning: '正在扫描 Steam、Epic、GOG、Xbox 和 Ubisoft…',
-    scanDone: count => count ? `扫描完成，新增 ${count} 个兼容游戏。` : '扫描完成，没有发现新的兼容游戏。',
     saved: '设置已保存。'
   } : {
     master: 'Enable DLSS Neural Rendering',
@@ -72,15 +70,13 @@
     detectedButton: 'Existing setup',
     info: 'How it works',
     rescan: 'Scan games',
-    scanning: 'Scanning Steam, Epic, GOG, Xbox and Ubisoft…',
-    scanDone: count => count ? `Scan complete. Added ${count} compatible game${count === 1 ? '' : 's'}.` : 'Scan complete. No new compatible games found.',
     saved: 'Settings saved.'
   };
 
   function ensureMasterRow() {
     let row = document.getElementById('nrMasterRow');
     if (row) return row;
-    const placement = document.querySelector('.glass-card .main-setting');
+    const placement = document.querySelector('#gameDetail .glass-card .main-setting');
     if (!placement?.parentElement) return null;
     row = document.createElement('div');
     row.id = 'nrMasterRow';
@@ -136,7 +132,7 @@
   }
 
   function decorateHero(game) {
-    const hero = document.querySelector('.hero');
+    const hero = document.querySelector('#gameDetail .hero');
     if (!hero) return;
     if (game.bannerDataUrl) {
       const url = String(game.bannerDataUrl).replace(/"/g, '%22');
@@ -174,23 +170,12 @@
     scan.type = 'button';
     scan.className = 'ghost compact scan-button';
     add.parentElement.insertBefore(scan, add);
-    scan.addEventListener('click', async () => {
-      scan.disabled = true;
-      toast(strings().scanning);
-      try {
-        const result = await window.nrApp.rescanGames();
-        if (!result?.ok) throw new Error(result?.message || 'Scan failed');
-        state = result.value.state;
-        render();
-        toast(strings().scanDone(result.value.added || 0));
-      } catch (error) { toast(error.message || String(error)); }
-      finally { scan.disabled = false; }
-    });
+    scan.addEventListener('click', () => scanGames());
   }
 
-  const originalRenderHome = renderHome;
-  renderHome = function() {
-    originalRenderHome();
+  const originalRenderGame = renderGame;
+  renderGame = function() {
+    originalRenderGame();
     ensureInfoPopover();
     const game = selectedGame();
     if (!game) return;
@@ -221,11 +206,15 @@
     originalRenderGames();
     ensureScanButton();
     const scan = document.getElementById('rescanGamesBtn');
-    if (scan) scan.textContent = strings().rescan;
+    if (scan) {
+      scan.textContent = strings().rescan;
+      scan.disabled = busy;
+    }
     decorateGameRows();
   };
 
   const scroller = document.querySelector('.content');
   document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => { if (scroller) scroller.scrollTop = 0; }));
+  document.getElementById('gameBackBtn')?.addEventListener('click', () => { if (scroller) scroller.scrollTop = 0; });
   render();
 })();
