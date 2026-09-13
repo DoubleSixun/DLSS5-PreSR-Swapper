@@ -15,6 +15,13 @@ SIGNATURE = "void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)"
 
 REPLACEMENT = r'''void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
 {
+    // Preserve upstream menu visibility semantics. The compact panel must not render
+    // while the menu is hidden: RenderMenu() can still run for splash/FPS/notification
+    // overlays, and drawing an interactive window outside the visible-menu state can
+    // leave OptiScaler's input-capture state out of sync with what is on screen.
+    if (!_isVisible)
+        return;
+
     auto config = ctx.config;
     auto& io = ctx.io;
     const float scale = std::clamp(ctx.menuResScale, 0.75f, 1.50f);
