@@ -5,7 +5,7 @@
 // Library page and make every page transition reset the shared content scroller.
 (() => {
   const scroller = document.querySelector('.content');
-  const MANAGER_BACKEND_ID = '0.7.7-dlss5mgr5';
+  const MANAGER_BACKEND_ID = '0.7.7-dlss5mgr6';
 
   if (I18N?.en) {
     I18N.en.games = 'Library';
@@ -157,8 +157,6 @@
     return card;
   }
 
-  // Games is now the one Library surface. Reuse the Steam-style cards that were
-  // previously on Home, with filters above them instead of maintaining two copies.
   renderGames = function() {
     const list = document.getElementById('gameList');
     if (!list) return;
@@ -202,9 +200,6 @@
     const oldPicker = document.querySelector('.language-choice');
     if (!oldPicker?.parentElement) return () => {};
 
-    // ux-fixes.js originally waits for the main process to rescan every game and then
-    // reloads the page. Replace those listeners with an optimistic UI update: the
-    // visible interface switches immediately while persistence finishes in the background.
     const picker = oldPicker.cloneNode(false);
     oldPicker.replaceWith(picker);
     const english = document.createElement('button');
@@ -266,10 +261,6 @@
         button.disabled = true;
         button.textContent = c.updatingBackend;
         await act(async () => {
-          // Keep the original backup contract intact: first restore the previous
-          // manager-owned DLLs, then install the current backend revision. If this
-          // game originally had a foreign OptiScaler setup, the normal migration
-          // confirmation is shown again before touching it.
           const restored = unwrap(await window.nrApp.restore(game.id));
           if (restored?.state) state = restored.state;
           const installed = unwrap(await window.nrApp.install(game.id));
