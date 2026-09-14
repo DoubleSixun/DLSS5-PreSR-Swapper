@@ -246,6 +246,18 @@ try {
         return { ok: false, code: error.code || 'overlayLanguageError', message: error.message || String(error) };
       }
     });
+
+    // Backend updates need to preserve the original backup rather than doing a
+    // restore-then-install dance. Register the dedicated managed-update service
+    // from the main process once all settings helpers are available.
+    require('./backend-update').register({
+      electron,
+      readSettings: read,
+      readOverlayPrefs,
+      readManagerLanguage,
+      applyOverlay,
+      applyOverlayLanguage
+    });
   }
 } catch {}
 
