@@ -2,11 +2,13 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const extractZip = require('extract-zip');
 const pe = require('./derived/pe');
 const ini = require('./ini');
 const download = require('./download');
 const fileState = require('./file-state');
+const gameProcess = require('./game-process');
 
 const RELEASE = Object.freeze({
   version: '0.7.7',
@@ -164,6 +166,7 @@ async function install({ gameDir, exePath, api, apiLabel, packageRoot, runtimePa
   const log = (code, params = {}) => onLog && onLog({ code, params });
   validatePackage(packageRoot);
   if (!runtimePath || !fs.existsSync(runtimePath)) throw fail('runtimeRequired', 'Neural Rendering runtime is missing.');
+  await gameProcess.assertNotRunning(exePath);
   if (!replaceExisting) checkConflicts(gameDir, exePath, api);
 
   const manifest = fileState.beginManifest(gameDir, exePath, api);
@@ -199,6 +202,95 @@ async function install({ gameDir, exePath, api, apiLabel, packageRoot, runtimePa
   }
 }
 
+async function snapshotManagedTargets(gameDir, targets) {
+  const root = path.join(fileState.rootFor(gameDir), `update-stage-${crypto.randomUUID()}`);
+  await fs.promises.mkdir(root, { recursive: true });
+  const rows = [];
+  for (let index = 0; index < targets.length; index += 1) {
+    const target = path.resolve(targets[index]);
+    const existed = fs.existsSync(target) && (await fs.promises.stat(target)).isFile();
+    const snapshot = path.join(root, `${String(index).padStart(3, '0')}.bak`);
+    if (existed) await fs.promises.copyFile(target, snapshot);
+    rows.push({ target, existed, snapshot: existed ? snapshot : null });
+  }
+  return { root, rows };
+}
+
+async function rollbackManagedTargets(snapshot) {
+  for (const row of snapshot.rows) {
+    if (row.existed) {
+      await fs.promises.mkdir(path.dirname(row.target), { recursive: true });
+      await fs.promises.copyFile(row.snapshot, row.target);
+    } else {
+      await fs.promises.rm(row.target, { force: true });
+    }
+  }
+}
+
+async function upgradeManaged({ gameDir, exePath, packageRoot, runtimePath, settings, language = 'en' }, onLog) {
+  const log = (code, params = {}) => onLog && onLog({ code, params });
+  validatePackage(packageRoot);
+  const manifest = fileState.loadManifest(gameDir);
+  if (!manifest?.optiscaler || manifest.route !== 'optiscaler') {
+    throw fail('notManaged', 'This game does not have a managed OptiScaler installation to update.');
+  }
+  const manifestBefore = JSON.parse(JSON.stringify(manifest));
+  const api = manifest.game?.api;
+  if (!api) throw fail('invalidBackup', 'The managed installation does not record its rendering API.');
+  if (manifest.optiscaler.version === RELEASE.packageId) return manifest;
+  if (!runtimePath || !fs.existsSync(runtimePath)) throw fail('runtimeRequired', 'Neural Rendering runtime is missing.');
+
+  await gameProcess.assertNotRunning(exePath, language);
+
+  const exeDir = path.dirname(exePath);
+  const plan = copyPlan(packageRoot, api);
+  const runtimeTarget = path.join(exeDir, 'nvngx_dlssnr.dll');
+  const configFile = path.join(exeDir, 'OptiScaler.ini');
+  const targets = [...new Set([
+    ...plan.map(item => path.join(exeDir, item.to)),
+    runtimeTarget,
+    configFile
+  ].map(file => path.resolve(file).toLowerCase()))].map(lower => {
+    const match = [...plan.map(item => path.join(exeDir, item.to)), runtimeTarget, configFile]
+      .find(file => path.resolve(file).toLowerCase() === lower);
+    return path.resolve(match);
+  });
+  const snapshot = await snapshotManagedTargets(gameDir, targets);
+
+  try {
+    for (const item of plan) {
+      const rel = await fileState.copyTracked(manifest, gameDir, item.from, path.join(exeDir, item.to), { kind: 'optiscaler' });
+      log('updated', { rel });
+    }
+
+    if (fs.existsSync(runtimeTarget)) {
+      log('runtimeKept', { rel: path.relative(gameDir, runtimeTarget) });
+    } else {
+      const rel = await fileState.copyTracked(manifest, gameDir, runtimePath, runtimeTarget, { kind: 'runtime' });
+      log('added', { rel });
+    }
+
+    const baseText = ini.read(configFile) || ini.read(path.join(packageRoot, 'OptiScaler.ini'));
+    await fileState.writeTracked(manifest, gameDir, configFile, configure(baseText, { exePath }, settings), { kind: 'config' });
+    manifest.optiscaler = {
+      ...manifest.optiscaler,
+      version: RELEASE.packageId,
+      upstreamVersion: RELEASE.version,
+      hook: hookFor(api),
+      updatedAt: new Date().toISOString()
+    };
+    await fileState.saveManifest(gameDir, manifest);
+    await fs.promises.rm(snapshot.root, { recursive: true, force: true });
+    log('backendUpdateDone', { fromVersion: manifestBefore.optiscaler.version, version: RELEASE.packageId });
+    return manifest;
+  } catch (error) {
+    try { await rollbackManagedTargets(snapshot); } catch {}
+    try { await fileState.saveManifest(gameDir, manifestBefore); } catch {}
+    try { await fs.promises.rm(snapshot.root, { recursive: true, force: true }); } catch {}
+    throw error;
+  }
+}
+
 function updateSettings(exePath, settings) {
   const file = path.join(path.dirname(exePath), 'OptiScaler.ini');
   if (!fs.existsSync(file)) return false;
@@ -219,5 +311,8 @@ module.exports = {
   copyPlan,
   checkConflicts,
   install,
+  snapshotManagedTargets,
+  rollbackManagedTargets,
+  upgradeManaged,
   updateSettings
 };
