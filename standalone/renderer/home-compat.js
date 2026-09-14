@@ -44,6 +44,7 @@
 
   const copy = () => state.language === 'zh-CN' ? {
     scan: '扫描游戏',
+    scanning: '正在扫描…',
     add: '添加游戏',
     all: '全部',
     compatible: '兼容 DLSS 5',
@@ -54,11 +55,13 @@
     empty: '没有符合当前筛选条件的游戏。',
     updateBackend: '更新游戏内后端',
     updatingBackend: '正在更新…',
-    backendUpdated: '游戏内后端已更新。请重新启动游戏后再测试 Overlay。',
+    backendUpdated: '游戏内后端已更新。原文件备份已保留，请重新启动游戏后再测试 Overlay。',
     languageError: '语言切换失败。',
+    overlayLanguageError: '桌面语言已切换，但游戏内 Overlay 语言同步失败。',
     summary: (all, compatible, configured) => `${all} 个已安装游戏 · ${compatible} 个兼容 · ${configured} 个已配置`
   } : {
     scan: 'Scan games',
+    scanning: 'Scanning…',
     add: 'Add game',
     all: 'All',
     compatible: 'DLSS 5 compatible',
@@ -69,8 +72,9 @@
     empty: 'No games match this filter.',
     updateBackend: 'Update in-game backend',
     updatingBackend: 'Updating…',
-    backendUpdated: 'In-game backend updated. Restart the game before testing the overlay.',
+    backendUpdated: 'In-game backend updated. The original-file backup was preserved. Restart the game before testing the overlay.',
     languageError: 'Unable to change language.',
+    overlayLanguageError: 'Desktop language changed, but the in-game overlay language could not be synchronized.',
     summary: (all, compatible, configured) => `${all} installed · ${compatible} compatible · ${configured} configured`
   };
 
@@ -186,7 +190,11 @@
 
     const scan = document.getElementById('rescanGamesBtn');
     const add = document.getElementById('addGameBtn');
-    if (scan) { scan.textContent = c.scan; scan.disabled = busy; }
+    if (scan) {
+      scan.textContent = busy ? c.scanning : c.scan;
+      scan.disabled = busy;
+      scan.setAttribute('aria-busy', busy ? 'true' : 'false');
+    }
     if (add) { add.textContent = c.add; add.disabled = busy; }
 
     const labels = { all: c.all, compatible: c.compatible, configured: c.configured };
@@ -228,6 +236,12 @@
         const result = await window.nrApp.setLanguage(language);
         if (!result?.ok) throw new Error(result?.message || copy().languageError);
         if (result.value && typeof result.value === 'object') state = { ...state, ...result.value, language };
+        try {
+          const overlay = await window.nrApp.setOverlayLanguage(language);
+          if (!overlay?.ok) toast(overlay?.message || copy().overlayLanguageError);
+        } catch {
+          toast(copy().overlayLanguageError);
+        }
       } catch (error) {
         state = { ...state, language: previous };
         toast(error.message || String(error));
@@ -261,11 +275,9 @@
         button.disabled = true;
         button.textContent = c.updatingBackend;
         await act(async () => {
-          const restored = unwrap(await window.nrApp.restore(game.id));
-          if (restored?.state) state = restored.state;
-          const installed = unwrap(await window.nrApp.install(game.id));
-          if (installed?.state) state = installed.state;
-          if (!installed?.cancelled) toast(c.backendUpdated);
+          const updated = unwrap(await window.nrApp.updateBackend(game.id));
+          state = unwrap(await window.nrApp.getState());
+          if (!updated?.cancelled && !updated?.unchanged) toast(c.backendUpdated);
         });
       });
     }
@@ -279,8 +291,9 @@
     const stale = needsBackendUpdate(selectedGame());
     button.classList.toggle('hidden', !stale);
     install.classList.toggle('hidden', stale);
-    button.textContent = copy().updateBackend;
+    button.textContent = busy && stale ? copy().updatingBackend : copy().updateBackend;
     button.disabled = busy || !stale;
+    button.setAttribute('aria-busy', busy && stale ? 'true' : 'false');
   };
 
   ensureLibraryToolbar();
