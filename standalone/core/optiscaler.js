@@ -10,7 +10,7 @@ const fileState = require('./file-state');
 
 const RELEASE = Object.freeze({
   version: '0.7.7',
-  packageId: '0.7.7-dlss5mgr5',
+  packageId: '0.7.7-dlss5mgr6',
   url: 'https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass/releases/download/v0.7.7/OptiScaler-DLSSNR-v0.7.7.zip',
   sha256: '4a315a3b3ee495631bd7cb1f562f609af577443602e507bfc7a7e6749c296258',
   readme: 'INSTALL-DLSSNR.md',
@@ -150,7 +150,7 @@ function copyPlan(root, api) {
 function checkConflicts(gameDir, exePath, api) {
   const exeDir = path.dirname(exePath);
   const hook = hookFor(api);
-  const watched = [hook, 'OptiScaler.ini', 'nvngx.dll_dlssnr.dll'];
+  const watched = [hook, 'OptiScaler.ini', 'nvngx_dlssnr.dll'];
   for (const name of watched) {
     const file = path.join(exeDir, name);
     if (!fs.existsSync(file)) continue;
