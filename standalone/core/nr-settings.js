@@ -5,6 +5,7 @@ const path = require('path');
 const ini = require('./ini');
 
 const STYLE_VALUES = new Set(['auto', '0', '1', '2']);
+const MANAGER_LANGUAGES = new Set(['en', 'zh-CN']);
 const OVERLAY_KEYS = Object.freeze({
   insert: 0x2d,
   f8: 0x77,
@@ -37,6 +38,11 @@ function styleValue(raw, fallback = 'auto') {
   return STYLE_VALUES.has(value) ? value : fallback;
 }
 
+function managerLanguage(value) {
+  const normalized = String(value || 'en');
+  return MANAGER_LANGUAGES.has(normalized) ? normalized : 'en';
+}
+
 function normalizeOverlay(value = {}) {
   const hotkey = Number(value.hotkey);
   const scale = Number(value.scale);
@@ -55,12 +61,25 @@ function overlayPrefsFile(userData) {
   return path.join(userData, 'overlay-preferences.json');
 }
 
+function libraryFile(userData) {
+  return path.join(userData, 'standalone-library.json');
+}
+
 function readOverlayPrefs(userData) {
   try {
     const parsed = JSON.parse(fs.readFileSync(overlayPrefsFile(userData), 'utf8'));
     return normalizeOverlay(parsed);
   } catch {
     return { ...DEFAULT_OVERLAY };
+  }
+}
+
+function readManagerLanguage(userData) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(libraryFile(userData), 'utf8'));
+    return managerLanguage(parsed?.language);
+  } catch {
+    return 'en';
   }
 }
 
@@ -106,9 +125,6 @@ function applyOverlay(exePath, preferences = DEFAULT_OVERLAY) {
   const values = [
     ['ShortcutKey', overlay.enabled ? String(overlay.hotkey) : '-1'],
     ['Scale', overlay.scale.toFixed(2)],
-    // The compact panel now stays inside OptiScaler's stock main-menu host.
-    // BGColorA controls that host's background alpha; keep FpsOverlayAlpha in
-    // sync for legacy builds and the lightweight performance overlay.
     ['BGColorA', overlay.opacity.toFixed(2)],
     ['FpsOverlayAlpha', overlay.opacity.toFixed(2)],
     ['FpsOverlayPos', String(overlay.position)],
@@ -116,6 +132,34 @@ function applyOverlay(exePath, preferences = DEFAULT_OVERLAY) {
     ['OverlayMenu', 'true']
   ];
   for (const [key, value] of values) text = ini.set(text, 'Menu', key, value);
+  fs.writeFileSync(file, text, 'utf8');
+  return true;
+}
+
+function findCjkFont() {
+  const windowsDir = process.env.WINDIR || process.env.SystemRoot || 'C:\\Windows';
+  const fonts = path.join(windowsDir, 'Fonts');
+  for (const name of ['msyh.ttc', 'msyhbd.ttc', 'msjh.ttc', 'simsun.ttc', 'simhei.ttf']) {
+    const candidate = path.join(fonts, name);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+function applyOverlayLanguage(exePath, language) {
+  const file = configFile(exePath);
+  if (!fs.existsSync(file)) return false;
+  const nextLanguage = managerLanguage(language);
+  let text = ini.read(file) || '';
+  text = ini.set(text, 'Menu', 'DLSS5ManagerLanguage', nextLanguage);
+
+  // The bundled Hack font is Latin-only. For Chinese, point OptiScaler at a Windows CJK font
+  // if the user has not already chosen a custom TTF. The backend patch selects Chinese glyphs.
+  if (nextLanguage === 'zh-CN' && !ini.get(text, 'Menu', 'TTFFontPath')) {
+    const cjkFont = findCjkFont();
+    if (cjkFont) text = ini.set(text, 'Menu', 'TTFFontPath', cjkFont);
+  }
+
   fs.writeFileSync(file, text, 'utf8');
   return true;
 }
@@ -138,28 +182,43 @@ function apply(exePath, settings = {}) {
   for (const [key, value] of values) text = ini.set(text, 'DlssNr', key, value);
   fs.writeFileSync(file, text, 'utf8');
 
-  // The Electron app stores overlay preferences separately so they remain global.
-  // Apply them whenever NR settings are written, including immediately after a fresh install.
+  // The Electron app stores overlay preferences/language globally. Re-apply both whenever
+  // NR settings are written, including immediately after a fresh backend install/update.
   try {
     const electron = require('electron');
-    if (electron?.app?.getPath) applyOverlay(exePath, readOverlayPrefs(electron.app.getPath('userData')));
+    if (electron?.app?.getPath) {
+      const userData = electron.app.getPath('userData');
+      applyOverlay(exePath, readOverlayPrefs(userData));
+      applyOverlayLanguage(exePath, readManagerLanguage(userData));
+    }
   } catch {}
   return true;
 }
 
+function readLibraryGames(userData) {
+  try { return JSON.parse(fs.readFileSync(libraryFile(userData), 'utf8'))?.games || []; }
+  catch { return []; }
+}
+
 function applyOverlayToLibrary(userData, preferences) {
-  const library = path.join(userData, 'standalone-library.json');
-  let games = [];
-  try { games = JSON.parse(fs.readFileSync(library, 'utf8'))?.games || []; } catch {}
   let updated = 0;
-  for (const game of games) {
+  for (const game of readLibraryGames(userData)) {
     try { if (applyOverlay(game.exePath, preferences)) updated += 1; } catch {}
   }
   return updated;
 }
 
-// Register the tiny global-preferences IPC here because this module is already loaded by
-// standalone/main.js. Guard it so node-only unit tests can require this file safely.
+function applyOverlayLanguageToLibrary(userData, language) {
+  const nextLanguage = managerLanguage(language);
+  let updated = 0;
+  for (const game of readLibraryGames(userData)) {
+    try { if (applyOverlayLanguage(game.exePath, nextLanguage)) updated += 1; } catch {}
+  }
+  return updated;
+}
+
+// Register tiny global-preferences IPC here because this module is already loaded by standalone/main.js.
+// Guard it so node-only unit tests can require this file safely.
 try {
   const electron = require('electron');
   if (electron?.ipcMain?.handle && electron?.app?.getPath) {
@@ -177,6 +236,16 @@ try {
         return { ok: false, code: error.code || 'overlayPreferencesError', message: error.message || String(error) };
       }
     });
+    electron.ipcMain.handle('app:set-overlay-language', (_event, language) => {
+      try {
+        const userData = electron.app.getPath('userData');
+        const nextLanguage = managerLanguage(language);
+        const updated = applyOverlayLanguageToLibrary(userData, nextLanguage);
+        return { ok: true, value: { language: nextLanguage, updated } };
+      } catch (error) {
+        return { ok: false, code: error.code || 'overlayLanguageError', message: error.message || String(error) };
+      }
+    });
   }
 } catch {}
 
@@ -186,11 +255,16 @@ module.exports = {
   apply,
   boolValue,
   styleValue,
+  managerLanguage,
   DEFAULT_OVERLAY,
   OVERLAY_KEYS,
   normalizeOverlay,
   readOverlayPrefs,
+  readManagerLanguage,
   writeOverlayPrefs,
   applyOverlay,
-  applyOverlayToLibrary
+  applyOverlayToLibrary,
+  findCjkFont,
+  applyOverlayLanguage,
+  applyOverlayLanguageToLibrary
 };
