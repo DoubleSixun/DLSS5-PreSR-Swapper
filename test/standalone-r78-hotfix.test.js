@@ -10,7 +10,7 @@ const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
 
 test('manager backend revision advances and enables the documented safe input fallback', () => {
   const optiscaler = read('standalone/core/optiscaler.js');
-  assert.match(optiscaler, /packageId: '0\.7\.7-dlss5mgr4'/);
+  assert.match(optiscaler, /packageId: '0\.7\.7-dlss5mgr5'/);
   assert.match(optiscaler, /\['Hotfix', 'ManualInputPolling', 'true'\]/);
   assert.match(optiscaler, /\['Hotfix', 'CheckForUpdate', 'false'\]/);
 });
@@ -19,7 +19,7 @@ test('library can refresh an older managed backend without losing original backu
   const compat = read('standalone/renderer/home-compat.js');
   const hotfix = read('standalone/renderer/r79-hotfix.js');
   assert.match(compat, /needsBackendUpdate/);
-  assert.match(hotfix, /CURRENT_BACKEND_ID = '0\.7\.7-dlss5mgr4'/);
+  assert.match(hotfix, /CURRENT_BACKEND_ID = '0\.7\.7-dlss5mgr5'/);
   assert.match(hotfix, /window\.nrApp\.restore\(game\.id\)/);
   assert.match(hotfix, /window\.nrApp\.install\(game\.id\)/);
   assert.match(hotfix, /Update in-game backend/);
@@ -33,13 +33,15 @@ test('library scan shows progress before discovery completes', () => {
   assert.match(hotfix, /aria-busy/);
 });
 
-test('compact overlay uses real pass labels with zero-based ImGui selection', () => {
+test('independent manager overlay owns visibility and pass controls', () => {
   const patch = read('scripts/patch-optiscaler-compact-overlay.py');
-  assert.match(patch, /int passIndex = passes - 1;/);
-  assert.match(patch, /const char\* passChoices\[\] = \{ "1", "2", "3" \};/);
-  assert.match(patch, /passes = std::clamp\(passIndex \+ 1, 1, 3\)/);
+  assert.match(patch, /static bool dlss5ManagerOverlayVisible = false/);
+  assert.match(patch, /RenderDlss5ManagerOverlay/);
+  assert.match(patch, /DoubleSixunManagerOverlay/);
+  assert.match(patch, /_isVisible = false;/);
+  assert.match(patch, /for \(int pass = 1; pass <= 3; \+\+pass\)/);
   assert.match(patch, /ImGuiWindowFlags_NoTitleBar/);
-  assert.match(patch, /DoubleSixunCompactHost/);
+  assert.doesNotMatch(patch, /DoubleSixunCompactHost/);
 });
 
 test('language picker switches visible state before waiting for persistence', () => {
