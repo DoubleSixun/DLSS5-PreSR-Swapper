@@ -31,7 +31,18 @@ test('desktop language is mirrored into managed in-game overlays with CJK glyph 
   const hotfix = read('standalone/renderer/r79-hotfix.js');
 
   assert.match(fix, /Dlss5ManagerLanguage/);
-  assert.match(fix, /GetGlyphRangesChineseFull/);
+  assert.match(fix, /GetDlss5ManagerGlyphRanges/);
+  assert.doesNotMatch(fix, /->GetGlyphRangesChinese/);
+  const glyphBlock = fix.match(/static const ImWchar chineseRanges\[\] = \{([\s\S]*?)\};/);
+  assert.ok(glyphBlock, 'CJK glyph ranges have static lifetime for atlas building');
+  const endpoints = [...glyphBlock[1].matchAll(/0x[0-9A-F]+/gi)].map(([hex]) => Number(hex));
+  assert.equal(endpoints.length % 2, 0, 'glyph ranges use inclusive start/end pairs');
+  for (const character of new Set([...fix].filter(char => char.codePointAt(0) > 0x7f))) {
+    const codepoint = character.codePointAt(0);
+    assert.ok(endpoints.some((start, index) => index % 2 === 0 &&
+      codepoint >= start && codepoint <= endpoints[index + 1]),
+    `overlay glyph ranges must cover ${character} (U+${codepoint.toString(16)})`);
+  }
   assert.match(fix, /神经渲染/);
   assert.match(fix, /模型分辨率/);
   assert.match(fix, /实验性/);

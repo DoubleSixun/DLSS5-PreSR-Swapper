@@ -13,6 +13,30 @@ import pathlib
 import sys
 
 
+MANAGER_GLYPH_RANGES = r'''static const ImWchar* GetDlss5ManagerGlyphRanges(ImFontAtlas* atlas, bool chinese)
+{
+    if (!chinese)
+        return atlas->GetGlyphRangesDefault();
+
+    // The pinned ImGui disables obsolete glyph-range helpers. Keep the ranges
+    // alive until atlas build/upload, including for legacy rendering backends.
+    static const ImWchar chineseRanges[] = {
+        0x0020, 0x00FF, // Latin
+        0x2000, 0x206F, // General punctuation
+        0x3000, 0x30FF, // CJK symbols, punctuation, Hiragana and Katakana
+        0x31F0, 0x31FF, // Katakana extensions
+        0x3400, 0x4DBF, // CJK unified ideographs extension A
+        0x4E00, 0x9FFF, // CJK unified ideographs
+        0xFF00, 0xFFEF, // Half-width and full-width forms
+        0xFFFD, 0xFFFD, // Replacement character
+        0
+    };
+    return chineseRanges;
+}
+
+'''
+
+
 def replace_exact(text: str, old: str, new: str, label: str, expected: int | None = None) -> str:
     count = text.count(old)
     if expected is not None and count != expected:
@@ -291,11 +315,13 @@ def main() -> int:
         "manager language config load")
     config_cpp.write_text(cfg_cpp, encoding="utf-8")
 
-    # OptiScaler normally loads only the default Latin glyph range even for a custom TTF.
-    # When the Manager asks for Chinese, load the full Chinese range from the system CJK font
-    # selected by the Electron app. English keeps the smaller/default range.
+    # Supply explicit CJK ranges without relying on ImGui's disabled obsolete APIs.
+    # English keeps the default range; Chinese uses the system font selected by the app.
+    init_signature = "void MenuCommon::Init(HWND InHwnd, bool isUWP)"
+    text = replace_once(text, init_signature, MANAGER_GLYPH_RANGES + init_signature,
+                        "manager glyph range helper")
     glyph_old = "io.Fonts->GetGlyphRangesDefault()"
-    glyph_new = '(Config::Instance()->Dlss5ManagerLanguage.value_or_default() == "zh-CN" ? io.Fonts->GetGlyphRangesChineseFull() : io.Fonts->GetGlyphRangesDefault())'
+    glyph_new = 'GetDlss5ManagerGlyphRanges(io.Fonts, Config::Instance()->Dlss5ManagerLanguage.value_or_default() == "zh-CN")'
     text = replace_exact(text, glyph_old, glyph_new, "manager CJK glyph range")
 
     target.write_text(text, encoding="utf-8")
