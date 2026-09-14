@@ -1,7 +1,7 @@
 'use strict';
 
 (() => {
-  const CURRENT_BACKEND_ID = '0.7.7-dlss5mgr4';
+  const CURRENT_BACKEND_ID = '0.7.7-dlss5mgr5';
   const text = () => state.language === 'zh-CN' ? {
     scan: '扫描游戏', scanning: '正在扫描…',
     update: '更新游戏内后端', updating: '正在更新…',
