@@ -5,7 +5,7 @@
 // Library page and make every page transition reset the shared content scroller.
 (() => {
   const scroller = document.querySelector('.content');
-  const MANAGER_BACKEND_ID = '0.7.7-dlss5mgr3';
+  const MANAGER_BACKEND_ID = '0.7.7-dlss5mgr5';
 
   if (I18N?.en) {
     I18N.en.games = 'Library';
