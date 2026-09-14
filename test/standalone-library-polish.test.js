@@ -50,15 +50,18 @@ test('existing OptiScaler setup can migrate through managed backup and restore',
   assert.match(optiscaler, /migratedExisting/);
 });
 
-test('compact native overlay preserves OptiScaler menu visibility and input lifecycle', () => {
+test('independent native overlay preserves OptiScaler rendering and input plumbing without exposing its stock menu', () => {
   const patch = read('scripts/patch-optiscaler-compact-overlay.py');
-  assert.match(patch, /TABLE_SIGNATURE = "void MenuCommon::RenderMainMenuTable/);
-  assert.match(patch, /Preserve RenderMainMenuWindow/);
-  assert.doesNotMatch(patch, /REPLACEMENT\s*=\s*r'''void MenuCommon::RenderMainMenuWindow/);
+  assert.match(patch, /RENDER_MENU_SIGNATURE = "bool MenuCommon::RenderMenu/);
+  assert.match(patch, /INPUT_MODE_SIGNATURE = "void MenuCommon::UpdateMenuInputMode/);
+  assert.match(patch, /SHORTCUTS_SIGNATURE = "void MenuCommon::HandleMenuShortcuts/);
+  assert.match(patch, /dlss5ManagerOverlayVisible/);
+  assert.match(patch, /RenderDlss5ManagerOverlay/);
+  assert.match(patch, /OptiInput::ResetMenuInputTransientState/);
   assert.match(patch, /io\.WantCaptureKeyboard = false/);
   assert.match(patch, /io\.WantCaptureMouse = false/);
-  assert.match(patch, /DoubleSixunCompactOverlay/);
-  assert.match(patch, /DoubleSixunCompactHost/);
+  assert.match(patch, /DoubleSixunManagerOverlay/);
+  assert.doesNotMatch(patch, /DoubleSixunCompactHost/);
 });
 
 test('Settings removes the redundant one-language description', () => {
