@@ -139,7 +139,7 @@ test('non-blocking setting updates no longer pre-render switches back to old sta
   assert.match(ux, /if \(lock\) \{ busy = true; render\(\); \}/);
 });
 
-test('desktop settings expose global compact overlay controls and native patch exists', () => {
+test('desktop settings expose global manager overlay controls and native patch exists', () => {
   const preload = read('standalone/preload.js');
   const ux = read('standalone/renderer/ux-fixes.js');
   const patch = read('scripts/patch-optiscaler-compact-overlay.py');
@@ -149,7 +149,10 @@ test('desktop settings expose global compact overlay controls and native patch e
   assert.match(ux, /overlayHotkey/);
   assert.match(ux, /overlayOpacity/);
   assert.match(ux, /overlayPosition/);
-  assert.match(patch, /DoubleSixunCompactOverlay/);
+  assert.match(patch, /DoubleSixunManagerOverlay/);
+  assert.match(patch, /dlss5ManagerOverlayVisible/);
+  assert.match(patch, /RenderDlss5ManagerOverlay/);
+  assert.match(patch, /_isVisible = false/);
   assert.match(patch, /Neural Rendering/);
   assert.match(patch, /Pre-SR/);
   assert.match(patch, /Pass 1 style/);
