@@ -1,15 +1,17 @@
 'use strict';
 
 (() => {
-  const CURRENT_BACKEND_ID = '0.7.7-dlss5mgr5';
+  const CURRENT_BACKEND_ID = '0.7.7-dlss5mgr6';
   const text = () => state.language === 'zh-CN' ? {
     scan: '扫描游戏', scanning: '正在扫描…',
     update: '更新游戏内后端', updating: '正在更新…',
-    updated: '游戏内后端已更新。请重新启动游戏后再测试 Overlay。'
+    updated: '游戏内后端已更新。请重新启动游戏后再测试 Overlay。',
+    overlayLanguageError: '游戏内 Overlay 语言同步失败。'
   } : {
     scan: 'Scan games', scanning: 'Scanning…',
     update: 'Update in-game backend', updating: 'Updating…',
-    updated: 'In-game backend updated. Restart the game before testing the overlay.'
+    updated: 'In-game backend updated. Restart the game before testing the overlay.',
+    overlayLanguageError: 'Unable to sync the in-game overlay language.'
   };
 
   const originalRenderGames = renderGames;
@@ -69,6 +71,24 @@
     button.textContent = text().update;
     button.disabled = busy || !stale;
   }
+
+  async function syncOverlayLanguage(language) {
+    if (!window.nrApp.setOverlayLanguage) return;
+    try {
+      const result = await window.nrApp.setOverlayLanguage(language);
+      if (result && !result.ok) throw new Error(result.message || text().overlayLanguageError);
+    } catch (error) {
+      toast(error.message || text().overlayLanguageError);
+    }
+  }
+
+  // The desktop language and in-game overlay are separate processes. Mirror every picker
+  // selection into managed OptiScaler.ini files, and also reconcile the current language on startup.
+  document.querySelector('.language-choice')?.addEventListener('click', event => {
+    const button = event.target.closest('button[data-language]');
+    if (button?.dataset?.language) syncOverlayLanguage(button.dataset.language);
+  });
+  syncOverlayLanguage(state.language);
 
   const previousRender = render;
   render = function() {
