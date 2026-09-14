@@ -18,6 +18,7 @@ test('manager backend revision advances and enables the documented safe input fa
 test('library can refresh an older managed backend without losing original backups', () => {
   const compat = read('standalone/renderer/home-compat.js');
   const hotfix = read('standalone/renderer/r79-hotfix.js');
+  assert.match(compat, /MANAGER_BACKEND_ID = '0\.7\.7-dlss5mgr5'/);
   assert.match(compat, /needsBackendUpdate/);
   assert.match(hotfix, /CURRENT_BACKEND_ID = '0\.7\.7-dlss5mgr5'/);
   assert.match(hotfix, /window\.nrApp\.restore\(game\.id\)/);
