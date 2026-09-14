@@ -17,14 +17,9 @@ contextBridge.exposeInMainWorld('nrApp', Object.freeze({
   setGameSettings: (id, settings) => ipcRenderer.invoke('game:set-settings', id, settings),
   importRuntime: id => ipcRenderer.invoke('runtime:import', id),
   install: id => ipcRenderer.invoke('game:install', id),
+  updateBackend: id => ipcRenderer.invoke('game:update-backend', id),
   restore: id => ipcRenderer.invoke('game:restore', id),
   minimize: () => ipcRenderer.send('window:minimize'),
   maximize: () => ipcRenderer.send('window:maximize'),
   close: () => ipcRenderer.send('window:close')
 }));
-
-window.addEventListener('DOMContentLoaded', () => {
-  const script = document.createElement('script');
-  script.src = 'r79-hotfix.js';
-  document.body.appendChild(script);
-});
