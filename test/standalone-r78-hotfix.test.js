@@ -10,7 +10,7 @@ const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
 
 test('manager backend revision advances and enables the documented safe input fallback', () => {
   const optiscaler = read('standalone/core/optiscaler.js');
-  assert.match(optiscaler, /packageId: '0\.7\.7-dlss5mgr5'/);
+  assert.match(optiscaler, /packageId: '0\.7\.7-dlss5mgr6'/);
   assert.match(optiscaler, /\['Hotfix', 'ManualInputPolling', 'true'\]/);
   assert.match(optiscaler, /\['Hotfix', 'CheckForUpdate', 'false'\]/);
 });
@@ -18,9 +18,9 @@ test('manager backend revision advances and enables the documented safe input fa
 test('library can refresh an older managed backend without losing original backups', () => {
   const compat = read('standalone/renderer/home-compat.js');
   const hotfix = read('standalone/renderer/r79-hotfix.js');
-  assert.match(compat, /MANAGER_BACKEND_ID = '0\.7\.7-dlss5mgr5'/);
+  assert.match(compat, /MANAGER_BACKEND_ID = '0\.7\.7-dlss5mgr6'/);
   assert.match(compat, /needsBackendUpdate/);
-  assert.match(hotfix, /CURRENT_BACKEND_ID = '0\.7\.7-dlss5mgr5'/);
+  assert.match(hotfix, /CURRENT_BACKEND_ID = '0\.7\.7-dlss5mgr6'/);
   assert.match(hotfix, /window\.nrApp\.restore\(game\.id\)/);
   assert.match(hotfix, /window\.nrApp\.install\(game\.id\)/);
   assert.match(hotfix, /Update in-game backend/);
