@@ -6,6 +6,8 @@ const library = require('./derived/library');
 const gameScan = require('./game-scan');
 
 const NOT_A_GAME_EXE = /^(unins|setup|install|vcredist|vc_redist|dxsetup|dxwebsetup|oalinst|uninstall|crashreport|crashhandler|easyanticheat|eac|battleye|be_service|launcher|activation|patch|update|dotnetfx|touchup|helper|service|cleanup|benchmark)/i;
+const AUXILIARY_EXE = /(?:launcher|updater|crashreporter|crashhandler|webhelper|cefprocess|qtwebengineprocess)\.exe$/i;
+const MAX_CANDIDATES = 180;
 
 function isFile(file) {
   try { return fs.statSync(file).isFile(); } catch { return false; }
@@ -77,7 +79,7 @@ async function scanEntry(entry) {
   const dlss = [];
   await gameScan.walkFiles(entry.dir, async (full, name, depth) => {
     if (/^nvngx_dlss\.dll$/i.test(name)) dlss.push(full);
-    if (!/\.exe$/i.test(name) || NOT_A_GAME_EXE.test(name)) return;
+    if (!/\.exe$/i.test(name) || NOT_A_GAME_EXE.test(name) || AUXILIARY_EXE.test(name)) return;
     let size = 0;
     try { size = fs.statSync(full).size; } catch {}
     exes.push({ path: full, name, depth, size });
@@ -85,36 +87,49 @@ async function scanEntry(entry) {
   return { exes, dlss };
 }
 
-async function candidateFor(entry) {
+async function candidatesFor(entry) {
   const { exes, dlss } = await scanEntry(entry);
-  if (!exes.length) return null;
-
-  const yysls = exes.find(item => /^yysls\.exe$/i.test(item.name));
-  if (yysls) return yysls.path;
-
   const folder = path.basename(entry.dir).toLowerCase().replace(/[^a-z0-9]+/g, '');
   const inspected = [];
-  for (const item of exes.slice(0, 180)) {
+  // Inspect likely game binaries first if a folder contains hundreds of tools.
+  exes.sort((a, b) => Number(/shipping/i.test(b.name)) - Number(/shipping/i.test(a.name)) || b.size - a.size || a.path.localeCompare(b.path));
+  for (const item of exes.slice(0, MAX_CANDIDATES)) {
+    await new Promise(resolve => setImmediate(resolve));
     let info = null;
     try { info = gameScan.inspectExecutable(item.path); } catch {}
+    const reasons = [];
     const name = path.basename(item.path, '.exe').toLowerCase().replace(/[^a-z0-9]+/g, '');
     let score = item.depth * 7;
-    if (info?.bitness === 64) score -= 36;
-    if (info?.api) score -= 38;
-    if (folder && name && (name === folder || folder.includes(name) || name.includes(folder))) score -= 22;
+    if (info?.bitness === 64) { score -= 36; reasons.push('x64'); }
+    if (info?.api) { score -= 38; reasons.push('graphicsApi'); }
+    if (/^yysls\.exe$/i.test(item.name)) { score -= 150; reasons.push('knownGame'); }
+    if (/(?:win64[-_])?shipping\.exe$/i.test(item.name)) { score -= 45; reasons.push('shipping'); }
+    if (folder && name && (name === folder || folder.includes(name) || name.includes(folder))) {
+      score -= 22; reasons.push('nameMatch');
+    }
     if (item.size > 0) score -= Math.min(18, Math.log2(Math.max(1, item.size / (1024 * 1024))) * 3);
     if (dlss.length) {
       const nearest = Math.min(...dlss.map(file => pathDistance(path.dirname(item.path), path.dirname(file))));
       score += nearest * 11;
+      if (nearest <= 2) reasons.push('nearDlss');
     }
-    inspected.push({ path: item.path, score, supported: Boolean(info?.bitness === 64 && info?.api) });
+    inspected.push({
+      path: item.path, name: item.name, relativePath: path.relative(entry.dir, item.path),
+      bitness: info?.bitness || null, apiLabel: info?.apiLabel || null,
+      score, reasons, supported: Boolean(info?.bitness === 64 && info?.api)
+    });
   }
 
   inspected.sort((a, b) => {
     if (a.supported !== b.supported) return a.supported ? -1 : 1;
-    return a.score - b.score || a.path.length - b.path.length;
+    return a.score - b.score || a.path.length - b.path.length || a.path.localeCompare(b.path);
   });
-  return inspected[0]?.path || exes.sort((a, b) => a.depth - b.depth || b.size - a.size)[0]?.path || null;
+  return { candidates: inspected, truncated: exes.length > MAX_CANDIDATES, maxDepth: 8 };
+}
+
+async function candidateFor(entry) {
+  const result = await candidatesFor(entry);
+  return result.candidates[0]?.path || null;
 }
 
 async function inspectEntry(entry) {
@@ -154,6 +169,7 @@ async function discoverGames() {
 module.exports = {
   discoverGames,
   candidateFor,
+  candidatesFor,
   inspectEntry,
   steamBanner,
   steamCover,

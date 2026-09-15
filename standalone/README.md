@@ -6,7 +6,10 @@ This standalone app is intentionally separate from the original DLSS5-Swapper pr
 
 ## Current preview
 
-- Add a game by selecting its real `.exe`.
+- Add a game by choosing its installation folder, reviewing ranked EXE candidates and confirming the main program; direct `.exe` selection is also available.
+- Open cached game details immediately while refreshing only the selected game's status.
+- Right-click a game (or press Shift+F10) to Play, favorite/unfavorite, browse local files or hide/unhide it.
+- Favorites appear first. Hidden games remain available in the Hidden filter and stay hidden across scans and restarts. Hiding never deletes game files, configuration or backups.
 - Detect architecture, rendering API and native DLSS.
 - Install the pinned OptiScaler DLSS-NR Pre-SR Multipass backend.
 - Toggle `RunBeforeSR` without treating Pre-SR and after-SR as separate products.
@@ -15,6 +18,9 @@ This standalone app is intentionally separate from the original DLSS5-Swapper pr
 - Detect `nvngx_dlssnr.dll` beside the game or reuse a previously imported local cache.
 - Back up and restore files managed by this app.
 - English and Simplified Chinese UI.
+- The mgr7 overlay stays inside the current screen bounds at the selected scale; style labels have reserved space and all active advanced passes default open.
+
+To apply mgr7 to an existing managed game, close the game, open it in the new manager build and choose **Update in-game backend**, then restart the game. Installing a newer manager alone does not replace a backend already copied into a game folder.
 
 ## Runtime policy
 
@@ -41,6 +47,7 @@ From the repository root:
 npm ci
 npm run start:standalone
 npm test
+npx electron scripts/test-standalone-library-ui.js
 npm run build:standalone:portable
 ```
 

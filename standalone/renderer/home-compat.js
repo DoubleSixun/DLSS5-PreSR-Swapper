@@ -5,7 +5,7 @@
 // Library page and make every page transition reset the shared content scroller.
 (() => {
   const scroller = document.querySelector('.content');
-  const MANAGER_BACKEND_ID = '0.7.7-dlss5mgr6';
+  const MANAGER_BACKEND_ID = '0.7.7-dlss5mgr7';
 
   if (I18N?.en) {
     I18N.en.games = 'Library';
@@ -41,6 +41,8 @@
     game?.installed && game?.hasBackup && game?.optiscaler?.version && game.optiscaler.version !== MANAGER_BACKEND_ID
   );
   let libraryFilter = 'all';
+  let openingGame = false;
+  let menuPending = false;
 
   const copy = () => state.language === 'zh-CN' ? {
     scan: '扫描游戏',
@@ -49,6 +51,13 @@
     all: '全部',
     compatible: '兼容 DLSS 5',
     configured: '已配置',
+    hidden: '已隐藏',
+    favorites: '收藏夹',
+    otherGames: '其他游戏',
+    opening: '正在读取游戏状态…',
+    launching: '已发送游戏启动请求。',
+    hiddenNotice: '已隐藏，游戏文件和配置均保留；可在“已隐藏”中取消隐藏。',
+    unhiddenNotice: '游戏已恢复显示。',
     compatibleTag: '兼容',
     incompatibleTag: '不兼容',
     configuredTag: '已配置',
@@ -66,6 +75,13 @@
     all: 'All',
     compatible: 'DLSS 5 compatible',
     configured: 'Configured',
+    hidden: 'Hidden',
+    favorites: 'Favorites',
+    otherGames: 'Other games',
+    opening: 'Reading game status…',
+    launching: 'Game launch requested.',
+    hiddenNotice: 'Hidden. Game files and settings are untouched. Unhide it from the Hidden filter.',
+    unhiddenNotice: 'Game is visible again.',
     compatibleTag: 'Compatible',
     incompatibleTag: 'Not compatible',
     configuredTag: 'Configured',
@@ -98,7 +114,7 @@
     bar = document.createElement('div');
     bar.id = 'gamesFilterBar';
     bar.className = 'games-filter-bar';
-    for (const filter of ['all', 'compatible', 'configured']) {
+    for (const filter of ['all', 'compatible', 'configured', 'hidden']) {
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.filter = filter;
@@ -117,6 +133,11 @@
     card.className = 'home-game-card library-game-card';
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
+    card.dataset.gameId = game.id;
+    card.setAttribute('aria-label', gameTitle(game));
+    card.setAttribute('aria-haspopup', 'menu');
+    card.setAttribute('aria-disabled', busy ? 'true' : 'false');
+    card.classList.toggle('selected', game.id === state.selectedGameId);
 
     const art = document.createElement('img');
     art.className = 'home-game-art';
@@ -143,22 +164,75 @@
     ].filter(Boolean).join(' · ');
     text.append(title, meta);
     card.append(art, shade, text);
+    if (game.favorite) {
+      const star = document.createElement('span');
+      star.className = 'library-favorite-mark';
+      star.textContent = '★';
+      star.title = c.favorites;
+      card.appendChild(star);
+    }
     card.classList.toggle('not-compatible', !isCompatible(game));
 
     const open = async () => {
+      if (busy || openingGame) return;
+      const previousId = state.selectedGameId;
+      openingGame = true;
       await act(async () => {
-        state = unwrap(await window.nrApp.selectGame(game.id));
+        // Paint the cached detail immediately, then verify only this game's files.
+        state = { ...state, selectedGameId: game.id };
         showPage('game');
-      }, false);
+        try {
+          state = unwrap(await window.nrApp.selectGame(game.id));
+        } catch (error) {
+          state = { ...state, selectedGameId: previousId };
+          throw error;
+        } finally {
+          openingGame = false;
+        }
+      });
     };
     card.addEventListener('click', open);
     card.addEventListener('keydown', event => {
-      if (event.key === 'Enter' || event.key === ' ') {
+      if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+        event.preventDefault();
+        openMenu(game);
+      } else if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         open();
       }
     });
+    card.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      openMenu(game);
+    });
     return card;
+  }
+
+  async function openMenu(game) {
+    if (busy || menuPending) return;
+    menuPending = true;
+    try {
+      const action = unwrap(await window.nrApp.showGameMenu(game.id));
+      if (!action) return;
+      await act(async () => {
+        const current = state.games.find(item => item.id === game.id);
+        if (!current) return;
+        if (action === 'launch') {
+          unwrap(await window.nrApp.launchGame(game.id));
+          toast(copy().launching);
+        } else if (action === 'folder') {
+          unwrap(await window.nrApp.openGameFolder(game.id));
+        } else if (action === 'favorite') {
+          state = unwrap(await window.nrApp.setGameFavorite(game.id, !current.favorite));
+        } else if (action === 'hidden') {
+          state = unwrap(await window.nrApp.setGameHidden(game.id, !current.hidden));
+          toast(current.hidden ? copy().unhiddenNotice : copy().hiddenNotice);
+        }
+      });
+    } catch (error) { toast(error.message || String(error)); }
+    finally { menuPending = false; }
+    document.querySelector(`[data-game-id="${game.id}"]`)?.focus();
   }
 
   renderGames = function() {
@@ -168,11 +242,12 @@
     list.replaceChildren();
 
     const c = copy();
-    const visible = state.games.filter(game =>
+    const library = state.games.filter(game => !game.hidden);
+    const visible = state.games.filter(game => libraryFilter === 'hidden' ? game.hidden : !game.hidden && (
       libraryFilter === 'all' ||
       (libraryFilter === 'compatible' && isCompatible(game)) ||
       (libraryFilter === 'configured' && isConfigured(game))
-    );
+    ));
 
     if (!visible.length) {
       const empty = document.createElement('div');
@@ -180,13 +255,26 @@
       empty.textContent = c.empty;
       list.appendChild(empty);
     } else {
-      for (const game of visible) list.appendChild(cardFor(game));
+      const favorites = visible.filter(game => game.favorite);
+      const otherGames = visible.filter(game => !game.favorite);
+      const section = (title, games) => {
+        if (!games.length) return;
+        if (favorites.length) {
+          const heading = document.createElement('h2');
+          heading.className = 'library-section-title';
+          heading.textContent = title;
+          list.appendChild(heading);
+        }
+        for (const game of games) list.appendChild(cardFor(game));
+      };
+      section(c.favorites, favorites);
+      section(c.otherGames, otherGames);
     }
 
-    const compatible = state.games.filter(isCompatible).length;
-    const configured = state.games.filter(isConfigured).length;
+    const compatible = library.filter(isCompatible).length;
+    const configured = library.filter(isConfigured).length;
     const body = gamesPage?.querySelector('.page-heading p');
-    if (body) body.textContent = c.summary(state.games.length, compatible, configured);
+    if (body) body.textContent = c.summary(library.length, compatible, configured);
 
     const scan = document.getElementById('rescanGamesBtn');
     const add = document.getElementById('addGameBtn');
@@ -197,10 +285,11 @@
     }
     if (add) { add.textContent = c.add; add.disabled = busy; }
 
-    const labels = { all: c.all, compatible: c.compatible, configured: c.configured };
+    const labels = { all: c.all, compatible: c.compatible, configured: c.configured, hidden: `${c.hidden} (${state.games.length - library.length})` };
     for (const button of document.querySelectorAll('#gamesFilterBar button')) {
       button.textContent = labels[button.dataset.filter] || button.dataset.filter;
       button.classList.toggle('active', button.dataset.filter === libraryFilter);
+      button.setAttribute('aria-pressed', button.dataset.filter === libraryFilter ? 'true' : 'false');
     }
   };
 
@@ -301,6 +390,12 @@
   const baseRender = render;
   render = function() {
     baseRender();
+    const detail = document.getElementById('gameDetail');
+    if (detail) { detail.inert = openingGame; detail.setAttribute('aria-busy', String(openingGame)); }
+    if (openingGame && currentPage === 'game') {
+      const status = document.getElementById('inlineStatus');
+      if (status) { status.textContent = copy().opening; status.setAttribute('role', 'status'); }
+    }
     paintLanguage();
     paintBackendUpdate();
   };

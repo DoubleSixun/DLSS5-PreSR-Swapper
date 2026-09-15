@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -40,6 +40,9 @@ let liveState = null;
 let discoveryPromise = null;
 const iconCache = new Map();
 const artworkCache = new Map();
+const inspectionCache = new Map();
+let folderSelection = null;
+let folderSelectionGeneration = 0;
 
 const stateFile = () => path.join(app.getPath('userData'), 'standalone-library.json');
 const idFor = exePath => crypto.createHash('sha1').update(path.resolve(exePath).toLowerCase()).digest('hex').slice(0, 16);
@@ -90,6 +93,8 @@ function normalizeRecord(exePath, meta = {}) {
     bannerUrl: meta.bannerUrl || null,
     coverPath: meta.coverPath || null,
     coverUrl: meta.coverUrl || null,
+    favorite: Boolean(meta.favorite),
+    hidden: Boolean(meta.hidden),
     settings: settingsFor(meta.settings)
   };
 }
@@ -142,9 +147,17 @@ function existingNrSetup(exePath, chosen) {
     .every(file => fs.existsSync(file));
 }
 
-async function inspectRecord(record) {
+async function inspectRecord(record, refresh = false) {
   const profile = profileFor(record.exePath);
-  const result = await gameScan.inspect(record.exePath, profile);
+  if (refresh) inspectionCache.delete(record.id);
+  if (!inspectionCache.has(record.id)) {
+    const pending = gameScan.inspect(record.exePath, profile);
+    inspectionCache.set(record.id, pending);
+    pending.catch(() => {
+      if (inspectionCache.get(record.id) === pending) inspectionCache.delete(record.id);
+    });
+  }
+  const result = await inspectionCache.get(record.id);
   const compatible = Boolean(result.chosen && result.chosen.bitness === 64 && result.chosen.api && result.dlss);
   return {
     id: record.id,
@@ -154,6 +167,8 @@ async function inspectRecord(record) {
     displayName: profile?.names?.[loadState().language] || record.displayName,
     launcher: record.launcher || 'Manual',
     storeId: record.storeId || null,
+    favorite: Boolean(record.favorite),
+    hidden: Boolean(record.hidden),
     settings: nrSettings.read(record.exePath, settingsFor(record.settings)),
     onlineRisk: Boolean(profile?.onlineRisk),
     chosen: result.chosen,
@@ -170,11 +185,11 @@ async function inspectRecord(record) {
   };
 }
 
-async function viewState() {
+async function viewState({ refreshIds = [], refreshAll = false } = {}) {
   const state = loadState();
   const games = [];
   for (const record of state.games) {
-    try { games.push(await inspectRecord(record)); }
+    try { games.push(await inspectRecord(record, refreshAll || refreshIds.includes(record.id))); }
     catch (error) {
       games.push({
         ...record,
@@ -193,14 +208,14 @@ async function viewState() {
       });
     }
   }
-  if (!state.selectedGameId && games[0]) {
-    state.selectedGameId = games[0].id;
+  if (!games.some(game => game.id === state.selectedGameId)) {
+    state.selectedGameId = games.find(game => !game.hidden)?.id || null;
     saveState();
   }
   return { language: state.language, selectedGameId: state.selectedGameId, games };
 }
 
-async function discoverAndMerge() {
+async function discoverAndMerge(refreshAll = false) {
   const found = await discovery.discoverGames();
   const state = loadState();
   let added = 0;
@@ -221,9 +236,9 @@ async function discoverAndMerge() {
     state.games.push(candidate);
     added += 1;
   }
-  if (!state.selectedGameId && state.games[0]) state.selectedGameId = state.games[0].id;
+  if (!state.selectedGameId) state.selectedGameId = state.games.find(game => !game.hidden)?.id || null;
   saveState();
-  return { added, state: await viewState() };
+  return { added, state: await viewState({ refreshAll }) };
 }
 
 async function ensureAutoDiscovery() {
@@ -301,7 +316,7 @@ function createWindow() {
 
 ipcMain.handle('app:get-state', () => safeResult(async () => {
   await ensureAutoDiscovery();
-  return viewState();
+  return viewState({ refreshIds: [loadState().selectedGameId] });
 }));
 ipcMain.handle('app:set-language', (_event, language) => safeResult(async () => {
   if (!['en', 'zh-CN'].includes(language)) throw new Error('Unsupported language');
@@ -310,42 +325,104 @@ ipcMain.handle('app:set-language', (_event, language) => safeResult(async () => 
   return viewState();
 }));
 ipcMain.handle('games:rescan', () => safeResult(async () => {
-  discoveryPromise = discoverAndMerge();
+  discoveryPromise = discoverAndMerge(true);
   return discoveryPromise;
 }));
+function addExecutable(exePath, meta = {}) {
+  if (!/\.exe$/i.test(exePath) || !fs.statSync(exePath).isFile()) throw new Error('Choose a valid game executable.');
+  const record = normalizeRecord(exePath, meta);
+  const state = loadState();
+  const existing = state.games.find(game => game.id === record.id);
+  // Re-adding restores visibility without discarding favorites, launcher IDs or backups.
+  if (existing) existing.hidden = false;
+  else state.games.push(record);
+  state.selectedGameId = record.id;
+  saveState();
+  return viewState({ refreshIds: [record.id] });
+}
+
+ipcMain.handle('games:choose-folder', () => safeResult(async () => {
+  const generation = ++folderSelectionGeneration;
+  folderSelection = null;
+  const picked = await dialog.showOpenDialog(win, {
+    title: loadState().language === 'zh-CN' ? '选择游戏安装文件夹' : 'Choose the game installation folder',
+    properties: ['openDirectory']
+  });
+  if (picked.canceled || !picked.filePaths[0]) return { cancelled: true };
+  const root = path.resolve(picked.filePaths[0]);
+  const result = await discovery.candidatesFor({ dir: root });
+  if (generation !== folderSelectionGeneration) return { cancelled: true };
+  const token = crypto.randomUUID();
+  folderSelection = { token, root, candidates: result.candidates };
+  return {
+    token, root, truncated: result.truncated, maxDepth: result.maxDepth,
+    candidates: result.candidates.map(({ path: _path, score: _score, ...item }, index) => ({ ...item, index }))
+  };
+}));
+ipcMain.handle('games:add-candidate', (_event, token, index) => safeResult(async () => {
+  const selection = folderSelection;
+  if (!selection || token !== selection.token || !Number.isInteger(index) || !selection.candidates[index]) {
+    throw new Error('This selection has expired. Choose the game folder again.');
+  }
+  folderSelection = null;
+  return addExecutable(selection.candidates[index].path, { libraryDir: selection.root });
+}));
 ipcMain.handle('games:add', () => safeResult(async () => {
+  folderSelectionGeneration += 1;
+  folderSelection = null;
   const picked = await dialog.showOpenDialog(win, {
     title: loadState().language === 'zh-CN' ? '选择游戏主程序' : 'Choose the game executable',
     properties: ['openFile'],
     filters: [{ name: 'Windows executable', extensions: ['exe'] }]
   });
-  if (picked.canceled || !picked.filePaths[0]) return viewState();
-  const record = normalizeRecord(picked.filePaths[0]);
-  const state = loadState();
-  const existing = state.games.findIndex(game => game.id === record.id);
-  if (existing >= 0) state.games[existing] = { ...state.games[existing], ...record, settings: settingsFor(state.games[existing].settings) };
-  else state.games.push(record);
-  state.selectedGameId = record.id;
-  saveState();
-  return viewState();
+  if (picked.canceled || !picked.filePaths[0]) return { cancelled: true };
+  return addExecutable(picked.filePaths[0]);
 }));
 ipcMain.handle('games:select', (_event, id) => safeResult(async () => {
   if (!recordFor(id)) throw new Error('Unknown game');
   loadState().selectedGameId = id;
   saveState();
-  return viewState();
+  return viewState({ refreshIds: [id] });
 }));
-ipcMain.handle('games:remove', (_event, id) => safeResult(async () => {
+function setHidden(id, hidden) {
+  const record = recordFor(id);
+  if (!record) throw new Error('Unknown game');
+  record.hidden = Boolean(hidden);
   const state = loadState();
-  state.games = state.games.filter(game => game.id !== id);
-  if (state.selectedGameId === id) state.selectedGameId = state.games[0]?.id || null;
+  if (record.hidden && state.selectedGameId === id) state.selectedGameId = state.games.find(game => !game.hidden)?.id || null;
   saveState();
   return viewState();
+}
+// Keep the old IPC name safe for legacy callers: never delete files or the record.
+ipcMain.handle('games:remove', (_event, id) => safeResult(() => setHidden(id, true)));
+ipcMain.handle('games:set-hidden', (_event, id, hidden) => safeResult(() => setHidden(id, hidden)));
+ipcMain.handle('games:set-favorite', (_event, id, favorite) => safeResult(async () => {
+  const record = recordFor(id);
+  if (!record) throw new Error('Unknown game');
+  record.favorite = Boolean(favorite);
+  saveState();
+  return viewState();
+}));
+ipcMain.handle('games:context-menu', (_event, id) => safeResult(() => {
+  const record = recordFor(id);
+  if (!record) throw new Error('Unknown game');
+  const zh = loadState().language === 'zh-CN';
+  return new Promise(resolve => {
+    const item = (label, action) => ({ label, click: () => resolve(action) });
+    Menu.buildFromTemplate([
+      item(zh ? '开始游戏' : 'Play', 'launch'),
+      item(record.favorite ? (zh ? '取消收藏' : 'Remove from favorites') : (zh ? '添加至收藏夹' : 'Add to favorites'), 'favorite'),
+      item(zh ? '浏览本地文件' : 'Browse local files', 'folder'),
+      { type: 'separator' },
+      item(record.hidden ? (zh ? '取消隐藏' : 'Unhide') : (zh ? '隐藏（不删除游戏文件）' : 'Hide (keep game files)'), 'hidden')
+    ]).popup({ window: win, callback: () => resolve(null) });
+  });
 }));
 ipcMain.handle('game:open-folder', (_event, id) => safeResult(async () => {
   const record = recordFor(id);
   if (!record) throw new Error('Unknown game');
-  await shell.openPath(path.dirname(record.exePath));
+  const error = await shell.openPath(path.dirname(record.exePath));
+  if (error) throw new Error(error);
   return true;
 }));
 ipcMain.handle('game:launch', (_event, id) => safeResult(async () => {
@@ -379,7 +456,7 @@ ipcMain.handle('game:set-settings', (_event, id, settings) => safeResult(async (
   record.settings = next;
   saveState();
   nrSettings.apply(record.exePath, next);
-  return viewState();
+  return viewState({ refreshIds: [id] });
 }));
 ipcMain.handle('runtime:import', (_event, id) => safeResult(async () => {
   const record = recordFor(id);
@@ -391,7 +468,7 @@ ipcMain.handle('game:install', (_event, id) => safeResult(async () => {
   const record = recordFor(id);
   if (!record) throw new Error('Unknown game');
   if (!(await confirmOnlineRisk(record))) return { cancelled: true, state: await viewState() };
-  const inspected = await inspectRecord(record);
+  const inspected = await inspectRecord(record, true);
   if (!inspected.chosen) throw Object.assign(new Error('No supported game executable was detected.'), { code: 'noExecutable' });
   if (inspected.chosen.bitness !== 64) throw Object.assign(new Error('This Neural Rendering route requires a 64-bit game.'), { code: 'unsupportedArchitecture' });
   if (!inspected.chosen.api) throw Object.assign(new Error('The rendering API could not be detected.'), { code: 'noRenderingApi' });
@@ -419,14 +496,14 @@ ipcMain.handle('game:install', (_event, id) => safeResult(async () => {
   }, entry => logs.push(entry));
   nrSettings.apply(record.exePath, settingsFor(record.settings));
   nrSettings.applyOverlay(record.exePath, nrSettings.readOverlayPrefs(app.getPath('userData')));
-  return { logs, migrated: replaceExisting, state: await viewState() };
+  return { logs, migrated: replaceExisting, state: await viewState({ refreshIds: [id] }) };
 }));
 ipcMain.handle('game:restore', (_event, id) => safeResult(async () => {
   const record = recordFor(id);
   if (!record) throw new Error('Unknown game');
   const logs = [];
   await fileState.restore(record.dir, entry => logs.push(entry));
-  return { logs, state: await viewState() };
+  return { logs, state: await viewState({ refreshIds: [id] }) };
 }));
 
 ipcMain.on('window:minimize', () => win?.minimize());

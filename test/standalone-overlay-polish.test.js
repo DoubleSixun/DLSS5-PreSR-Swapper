@@ -12,7 +12,11 @@ test('manager overlay uses a safe horizontal inset and compact labeled style row
   const fix = read('scripts/fix-optiscaler-manager-overlay-compile.py');
   assert.match(fix, /horizontalMargin = 64\.0f \* scale/);
   assert.match(fix, /verticalMargin = 26\.0f \* scale/);
-  assert.match(fix, /comboWidth = 176\.0f \* scale/);
+  assert.match(fix, /comboWidth = std::min\(176\.0f \* scale, ImGui::GetContentRegionAvail\(\)\.x\)/);
+  assert.match(fix, /panelWidth = std::min/);
+  assert.match(fix, /panelHeightLimit/);
+  assert.match(fix, /SetNextWindowPos\(anchor, ImGuiCond_Always, pivot\)/);
+  assert.match(fix, /ImVec2\(panelWidth, panelHeightLimit\)/);
   assert.match(fix, /optionalStyleCombo/);
   assert.match(fix, /baseStyle/);
   assert.match(fix, /##ManagerPass2Style/);
@@ -55,11 +59,11 @@ test('desktop language is mirrored into managed in-game overlays with CJK glyph 
   assert.match(compat, /overlayLanguageError/);
 });
 
-test('manager backend revision is mgr6 everywhere user-facing update detection relies on it', () => {
+test('manager backend revision is mgr7 everywhere user-facing update detection relies on it', () => {
   for (const rel of [
     'standalone/core/optiscaler.js',
     'standalone/renderer/home-compat.js'
   ]) {
-    assert.match(read(rel), /0\.7\.7-dlss5mgr6/, `${rel} should use mgr6`);
+    assert.match(read(rel), /0\.7\.7-dlss5mgr7/, `${rel} should use mgr7`);
   }
 });

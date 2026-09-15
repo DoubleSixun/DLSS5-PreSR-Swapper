@@ -283,10 +283,12 @@ $('homeOpenGamesBtn').addEventListener('click', () => showPage('games'));
 $('gameBackBtn').addEventListener('click', () => showPage('games'));
 
 async function addGame() {
+  if (window.showAddGameDialog) return window.showAddGameDialog();
   const beforeId = state.selectedGameId;
   const beforeCount = state.games.length;
   await act(async () => {
     const next = unwrap(await window.nrApp.addGame());
+    if (next.cancelled) return;
     const changed = next.games.length !== beforeCount || next.selectedGameId !== beforeId;
     state = next;
     if (changed) showPage('game');

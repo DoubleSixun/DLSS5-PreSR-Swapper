@@ -96,24 +96,42 @@ def main() -> int:
         break;'''
     new_position = r'''    const float horizontalMargin = 64.0f * scale;
     const float verticalMargin = 26.0f * scale;
+    // Bound the panel against the current viewport, including resolution/scale changes.
+    const float safeX = std::min(horizontalMargin, io.DisplaySize.x * 0.08f);
+    const float safeY = std::min(verticalMargin, io.DisplaySize.y * 0.05f);
+    const float panelWidth = std::min(480.0f * scale, std::max(1.0f, io.DisplaySize.x - 2.0f * safeX));
+    const float panelHeightLimit = std::max(1.0f, io.DisplaySize.y - 2.0f * safeY);
 
-    ImVec2 anchor(io.DisplaySize.x - horizontalMargin, verticalMargin);
+    ImVec2 anchor(io.DisplaySize.x - safeX, safeY);
     ImVec2 pivot(1.0f, 0.0f);
     switch (config->FpsOverlayPosition.value_or_default())
     {
     case FpsOverlayPos_TopLeft:
-        anchor = ImVec2(horizontalMargin, verticalMargin);
+        anchor = ImVec2(safeX, safeY);
         pivot = ImVec2(0.0f, 0.0f);
         break;
     case FpsOverlayPos_BottomLeft:
-        anchor = ImVec2(horizontalMargin, io.DisplaySize.y - verticalMargin);
+        anchor = ImVec2(safeX, io.DisplaySize.y - safeY);
         pivot = ImVec2(0.0f, 1.0f);
         break;
     case FpsOverlayPos_BottomRight:
-        anchor = ImVec2(io.DisplaySize.x - horizontalMargin, io.DisplaySize.y - verticalMargin);
+        anchor = ImVec2(io.DisplaySize.x - safeX, io.DisplaySize.y - safeY);
         pivot = ImVec2(1.0f, 1.0f);
         break;'''
     text = replace_once(text, old_position, new_position, "overlay safe margins")
+    text = replace_once(text,
+        '    ImGui::SetNextWindowPos(anchor, ImGuiCond_Appearing, pivot);\n'
+        '    ImGui::SetNextWindowSizeConstraints(ImVec2(390.0f * scale, 0.0f),\n'
+        '                                        ImVec2(560.0f * scale, io.DisplaySize.y * 0.90f));',
+        '    ImGui::SetNextWindowPos(anchor, ImGuiCond_Always, pivot);\n'
+        '    ImGui::SetNextWindowSizeConstraints(ImVec2(panelWidth, 0.0f),\n'
+        '                                        ImVec2(panelWidth, panelHeightLimit));',
+        'viewport-constrained window')
+    text = replace_once(text,
+        '                             ImGuiWindowFlags_NoCollapse |\n',
+        '                             ImGuiWindowFlags_NoCollapse |\n'
+        '                             ImGuiWindowFlags_NoMove |\n',
+        'anchor-owned position')
 
     # Language is deliberately a manager-owned INI key. It follows the desktop app without
     # changing OptiScaler's own stock-menu language or exposing that menu to the user.
@@ -164,7 +182,7 @@ def main() -> int:
         {
             ImGui::TextUnformatted(label);
             ImGui::SameLine();
-            const float comboWidth = 176.0f * scale;
+            const float comboWidth = std::min(176.0f * scale, ImGui::GetContentRegionAvail().x);
             const float rightEdge = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
             ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), rightEdge - comboWidth));
             ImGui::SetNextItemWidth(comboWidth);
@@ -234,6 +252,17 @@ def main() -> int:
     ]
     for old, new, label in replacements:
         text = replace_once(text, old, new, label)
+
+    # Advanced sliders reserve space for their visible label AND reset button.
+    text = replace_once(text,
+        '                if (ImGui::SliderFloat(label, &value, mn, mx, "%.2f"))',
+        '                const float labelWidth = ImGui::CalcTextSize(label).x;\n'
+        '                const float resetWidth = ImGui::CalcTextSize(tr("Reset", "重置")).x + ImGui::GetStyle().FramePadding.x * 2.0f;\n'
+        '                const float sliderWidth = ImGui::GetContentRegionAvail().x - labelWidth - resetWidth -\n'
+        '                    ImGui::GetStyle().ItemInnerSpacing.x - ImGui::GetStyle().ItemSpacing.x;\n'
+        '                ImGui::SetNextItemWidth(std::max(1.0f, sliderWidth));\n'
+        '                if (ImGui::SliderFloat(label, &value, mn, mx, "%.2f"))',
+        'advanced slider width')
 
     # Localize advanced-pass controls and keep every currently-active pass open by default.
     text = replace_once(

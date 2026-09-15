@@ -49,6 +49,8 @@ SHORTCUTS_REPLACEMENT = r"""void MenuCommon::HandleMenuShortcuts(RenderMenuConte
     auto& state = ctx.state;
     auto config = ctx.config;
     auto& io = ctx.io;
+    if (io.DisplaySize.x <= 0.0f || io.DisplaySize.y <= 0.0f)
+        return;
 
     if (inputFG)
     {
@@ -564,12 +566,14 @@ static void RenderDlss5ManagerOverlay(TContext& ctx)
         else
             ImGui::TextColored(ImVec4(0.90f, 0.72f, 0.34f, 1.0f), "Waiting for DLSS / rendered scene");
 
-        ImGui::SameLine();
         const std::string shortcut =
             Keybind::KeyNameFromVirtualKeyCode(config->ShortcutKey.value_or_default());
         const std::string closeHint = shortcut + " / Esc to close";
         const float hintWidth = ImGui::CalcTextSize(closeHint.c_str()).x;
         const float rightEdge = ImGui::GetWindowContentRegionMax().x;
+        const float statusEnd = ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x;
+        if (statusEnd + ImGui::GetStyle().ItemSpacing.x + hintWidth <= rightEdge)
+            ImGui::SameLine();
         const float hintX = std::max(ImGui::GetCursorPosX(), rightEdge - hintWidth);
         ImGui::SetCursorPosX(hintX);
         ImGui::TextDisabled("%s", closeHint.c_str());
