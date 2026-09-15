@@ -1,0 +1,31 @@
+{
+  "appId": "com.doublesixun.dlss5nrmanager",
+  "productName": "DLSS 5 Neural Rendering Manager",
+  "directories": {
+    "output": "dist-standalone"
+  },
+  "files": [
+    "standalone/**/*",
+    "package.json",
+    "!standalone/electron-builder.json"
+  ],
+  "extraMetadata": {
+    "name": "dlss5-neural-rendering-manager",
+    "version": "0.1.0",
+    "description": "Standalone manager for DLSS 5 Neural Rendering, Pre-SR placement and OptiScaler model-pass profiles",
+    "main": "standalone/main.js",
+    "author": "DoubleSixun",
+    "license": "MIT"
+  },
+  "compression": "maximum",
+  "asar": true,
+  "win": {
+    "target": [
+      "portable"
+    ],
+    "icon": "build/icon.ico"
+  },
+  "portable": {
+    "artifactName": "DLSS5-Neural-Rendering-Manager-${version}-portable.${ext}"
+  }
+}

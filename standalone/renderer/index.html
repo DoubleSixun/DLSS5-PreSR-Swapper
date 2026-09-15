@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DLSS 5 Neural Rendering Manager</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="pass-styles.css" />
+  <link rel="stylesheet" href="liquid-glass.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">5</div>
+        <div>
+          <strong>DLSS 5</strong>
+          <small data-i18n="productSubtitle">Neural Rendering Manager</small>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-page="home"><span>⌂</span><b data-i18n="home">Home</b></button>
+        <button class="nav-item" data-page="games"><span>▦</span><b data-i18n="games">Games</b></button>
+        <button class="nav-item" data-page="settings"><span>⚙</span><b data-i18n="settings">Settings</b></button>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="titlebar">
+        <div class="crumb" id="crumb">Home</div>
+        <div class="window-controls">
+          <button id="minBtn">—</button>
+          <button id="maxBtn">□</button>
+          <button id="closeBtn">×</button>
+        </div>
+      </header>
+
+      <div class="content">
+        <section class="page active" id="page-home">
+          <section class="home-scan-card glass-card">
+            <div class="home-scan-copy">
+              <span class="home-kicker">DLSS 5</span>
+              <h1 data-i18n="homeTitle">Find compatible games</h1>
+              <p data-i18n="homeBody">Scan your installed game libraries for native DLSS titles that can use Neural Rendering.</p>
+              <div class="home-actions">
+                <button class="primary" id="homeScanBtn" data-i18n="scanGames">Scan games</button>
+                <button class="ghost" id="homeAddBtn" data-i18n="addGame">Add game</button>
+              </div>
+              <span class="home-scan-status" id="homeScanStatus"></span>
+            </div>
+          </section>
+
+          <section class="home-summary-grid">
+            <div class="home-summary-card">
+              <span data-i18n="compatibleGames">Compatible games</span>
+              <strong id="homeGameCount">0</strong>
+            </div>
+            <div class="home-summary-card">
+              <span data-i18n="installedGames">Neural Rendering installed</span>
+              <strong id="homeInstalledCount">0</strong>
+            </div>
+            <button class="home-summary-card home-open-games" id="homeOpenGamesBtn">
+              <span data-i18n="openLibrary">Open game library</span>
+              <strong>→</strong>
+            </button>
+          </section>
+        </section>
+
+        <section class="page" id="page-games">
+          <div class="page-heading">
+            <div><h1 data-i18n="games">Games</h1><p data-i18n="gamesBody">Games managed by this app.</p></div>
+            <button class="primary compact" id="addGameBtn" data-i18n="addGame">Add game</button>
+          </div>
+          <div class="game-list" id="gameList"></div>
+        </section>
+
+        <section class="page" id="page-game">
+          <div class="game-page-toolbar">
+            <button class="ghost compact" id="gameBackBtn"><span>←</span> <span data-i18n="games">Games</span></button>
+          </div>
+
+          <div id="gameEmptyState" class="empty-state hidden">
+            <div class="empty-icon">▦</div>
+            <h1 data-i18n="noGames">No games yet.</h1>
+          </div>
+
+          <div id="gameDetail" class="hidden">
+            <section class="hero">
+              <div class="hero-copy">
+                <h1 id="gameTitle">Game</h1>
+                <div class="badges" id="badges"></div>
+              </div>
+            </section>
+
+            <div class="section-heading">
+              <div>
+                <h2 data-i18n="neuralRendering">DLSS Neural Rendering</h2>
+                <p data-i18n="nrDescription">Install once, then choose whether Neural Rendering runs before DLSS Super Resolution.</p>
+              </div>
+              <span class="state-chip" id="installState">Ready</span>
+            </div>
+
+            <section class="glass-card">
+              <div class="setting-row main-setting">
+                <div>
+                  <strong data-i18n="runBeforeSr">Run before DLSS Super Resolution</strong>
+                  <p data-i18n="runBeforeSrBody">Enable Pre-SR. Leave it off to use the normal after-SR placement.</p>
+                </div>
+                <label class="switch">
+                  <input id="presrToggle" type="checkbox" checked />
+                  <span></span>
+                </label>
+              </div>
+
+              <div class="mode-line">
+                <span class="mode-badge" id="modeBadge">Pre-SR</span>
+                <span id="modeText"></span>
+              </div>
+
+              <details class="details-card">
+                <summary><span data-i18n="howItWorks">How it works</span><span>⌄</span></summary>
+                <div class="details-content">
+                  <div class="pipeline" id="pipeline"></div>
+                  <p id="pipelineExplain"></p>
+                </div>
+              </details>
+            </section>
+
+            <section class="glass-card controls-card">
+              <div class="control-grid">
+                <label class="field">
+                  <span data-i18n="passes">Passes</span>
+                  <select id="passesSelect">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                  </select>
+                </label>
+                <div class="field runtime-field">
+                  <span data-i18n="runtime">Neural Runtime</span>
+                  <div class="runtime-status" id="runtimeStatus">—</div>
+                </div>
+                <button class="primary install-button" id="installBtn" data-i18n="install">Install Neural Rendering</button>
+              </div>
+
+              <details class="details-card pass-profiles" id="passStylesDetails">
+                <summary><span data-i18n="passStyles">Per-pass styles</span><span>⌄</span></summary>
+                <div class="pass-style-grid">
+                  <div class="pass-card" data-pass-card="1">
+                    <div class="pass-card-head"><b data-i18n="pass1">Pass 1</b><small id="pass1State"></small></div>
+                    <label class="field compact-field"><span data-i18n="style">Style</span><select id="pass1Style"><option value="auto" data-i18n="backendDefault">Default</option><option value="0" data-i18n="standard">Standard</option><option value="1" data-i18n="natural">Natural</option><option value="2" data-i18n="cinematic">Cinematic</option></select></label>
+                  </div>
+                  <div class="pass-card" data-pass-card="2">
+                    <div class="pass-card-head"><b data-i18n="pass2">Pass 2</b><small id="pass2State"></small></div>
+                    <label class="field compact-field"><span data-i18n="style">Style</span><select id="pass2Style"><option value="auto" data-i18n="inheritPass1">Inherit Pass 1</option><option value="0" data-i18n="standard">Standard</option><option value="1" data-i18n="natural">Natural</option><option value="2" data-i18n="cinematic">Cinematic</option></select></label>
+                  </div>
+                  <div class="pass-card" data-pass-card="3">
+                    <div class="pass-card-head"><b data-i18n="pass3">Pass 3</b><small id="pass3State"></small></div>
+                    <label class="field compact-field"><span data-i18n="style">Style</span><select id="pass3Style"><option value="auto" data-i18n="inheritPass1">Inherit Pass 1</option><option value="0" data-i18n="standard">Standard</option><option value="1" data-i18n="natural">Natural</option><option value="2" data-i18n="cinematic">Cinematic</option></select></label>
+                  </div>
+                </div>
+                <p class="pass-help" data-i18n="passStylesHelp">Later passes can use their own style. Inherit keeps them linked to Pass 1.</p>
+              </details>
+
+              <div class="utility-row">
+                <button class="ghost" id="runtimeBtn" data-i18n="importRuntime">Import runtime</button>
+                <button class="ghost" id="folderBtn" data-i18n="openGameFolder">Open game folder</button>
+                <button class="ghost danger" id="restoreBtn" data-i18n="restore">Restore original</button>
+                <span class="inline-status" id="inlineStatus"></span>
+              </div>
+
+              <details class="details-card advanced">
+                <summary><span data-i18n="advanced">Advanced details</span><span>⌄</span></summary>
+                <div class="tech-grid" id="techGrid"></div>
+              </details>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" id="page-settings">
+          <div class="page-heading">
+            <div><h1 data-i18n="settings">Settings</h1><p data-i18n="settingsBody">Keep the interface in one language at a time.</p></div>
+          </div>
+          <section class="glass-card settings-page-card">
+            <label class="field language-field">
+              <span data-i18n="language">Language</span>
+              <select id="languageSelect"><option value="en">English</option><option value="zh-CN">简体中文</option></select>
+            </label>
+            <div class="about-copy">
+              <strong data-i18n="creditsTitle">Credits</strong>
+              <p data-i18n="creditsBody">Parts of PE/game compatibility inspection are derived from DLSS5-Swapper by Rakan Alkhaldi under the MIT License. Neural Rendering backend integration targets wilsjo2's OptiScaler-DLSSNR-PreSR-Multipass.</p>
+            </div>
+          </section>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+  <script src="ux-fixes.js"></script>
+  <script src="home-compat.js"></script>
+  <script src="library-dialog.js"></script>
+</body>
+</html>
