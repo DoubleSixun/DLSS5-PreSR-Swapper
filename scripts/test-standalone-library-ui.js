@@ -85,18 +85,50 @@ async function runLibraryUISmoke() {
 
 module.exports = runLibraryUISmoke;
 
-if (require.main === module) {
+// Electron's default app imports the entry file, so require.main is not this
+// CommonJS module. Keep the browser test export usable from ordinary Node too.
+if (process.versions.electron && process.type === 'browser') {
   const { app, BrowserWindow } = require('electron');
   const path = require('path');
+  let stage = 'waiting for Electron';
+  const timeout = setTimeout(() => {
+    console.error(`Library UI test timed out while ${stage}`);
+    app.exit(1);
+  }, 20000);
   app.whenReady().then(async () => {
-    const win = new BrowserWindow({ show: false, width: 1280, height: 820, webPreferences: {
-      preload: path.resolve(__dirname, '../test/fixtures/standalone-library-preload.js'),
-      contextIsolation: true, nodeIntegration: false, sandbox: false, backgroundThrottling: false
-    } });
-    try {
+    // Keep Electron alive between the two fresh fixture windows.
+    app.on('window-all-closed', () => {});
+    for (const width of [1280, 980]) {
+      stage = `loading the renderer at ${width}px`;
+      console.log(stage);
+      const win = new BrowserWindow({ show: false, width, height: 820, webPreferences: {
+        preload: path.resolve(__dirname, '../test/fixtures/standalone-library-preload.js'),
+        contextIsolation: true, nodeIntegration: false, sandbox: false, backgroundThrottling: false
+      } });
+      const errors = [];
+      win.webContents.on('preload-error', (_event, file, error) => {
+        errors.push(`${file}: ${error.message}`);
+        console.error(errors.at(-1));
+      });
+      win.webContents.on('console-message', (_event, level, message) => {
+        if (level >= 3) { errors.push(message); console.error('[renderer]', message); }
+      });
+      win.webContents.on('render-process-gone', (_event, details) => {
+        console.error('Renderer exited:', details.reason);
+        app.exit(1);
+      });
       await win.loadFile(path.resolve(__dirname, '../standalone/renderer/index.html'));
+      if (errors.length) throw new Error(errors.join('\n'));
+      stage = `checking library actions at ${width}px`;
+      console.log(stage);
       console.log(await win.webContents.executeJavaScript(`(${runLibraryUISmoke.toString()})()`));
-      app.exit(0);
-    } catch (error) { console.error(error); app.exit(1); }
+      if (errors.length) throw new Error(errors.join('\n'));
+      win.destroy();
+    }
+    clearTimeout(timeout);
+    app.exit(0);
+  }).catch(error => {
+    console.error(`Library UI test failed while ${stage}:`, error);
+    app.exit(1);
   });
 }
